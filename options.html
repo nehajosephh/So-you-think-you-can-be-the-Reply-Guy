@@ -1,174 +1,76 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-<meta charset="utf-8" />
-<title>So You Think You Can Be The Reply Guy</title>
-<style>
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-}
-
-.container {
-  background: white;
-  border-radius: 16px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  padding: 40px;
-  max-width: 500px;
-  width: 100%;
-}
-
-h1 {
-  color: #667eea;
-  font-size: 28px;
-  margin-bottom: 10px;
-  text-align: center;
-}
-
-.subtitle {
-  color: #999;
-  font-size: 14px;
-  text-align: center;
-  margin-bottom: 30px;
-}
-
-.setting-group {
-  margin-bottom: 30px;
-}
-
-label {
-  display: block;
-  color: #333;
-  font-weight: 600;
-  margin-bottom: 12px;
-  font-size: 14px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-input[type=number] {
-  width: 100%;
-  padding: 12px 16px;
-  font-size: 16px;
-  border: 2px solid #e0e0e0;
-  border-radius: 8px;
-  transition: all 0.3s ease;
-}
-
-input[type=number]:focus {
-  outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-}
-
-.counter-display {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  padding: 20px;
-  border-radius: 12px;
-  text-align: center;
-  margin-bottom: 20px;
-}
-
-.counter-label {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  opacity: 0.9;
-  margin-bottom: 8px;
-}
-
-.counter-value {
-  font-size: 48px;
-  font-weight: 700;
-}
-
-.note {
-  color: #666;
-  font-size: 13px;
-  line-height: 1.6;
-  margin-top: 10px;
-  padding: 10px 0;
-}
-
-button {
-  width: 100%;
-  padding: 14px 20px;
-  font-size: 16px;
-  font-weight: 600;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-#resetCount {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-  color: white;
-  margin-top: 20px;
-}
-
-#resetCount:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 20px rgba(245, 87, 108, 0.3);
-}
-
-hr {
-  border: none;
-  height: 1px;
-  background: #eee;
-  margin: 30px 0;
-}
-
-.info-box {
-  background: #f5f7ff;
-  border-left: 4px solid #667eea;
-  padding: 16px;
-  border-radius: 8px;
-  color: #555;
-  font-size: 13px;
-  line-height: 1.6;
-}
-</style>
+  <meta charset="utf-8" />
+  <title>So You Think You Can Be the Reply Guy — Options</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    :root{
+      --bg:#0f1724;
+      --card:#0b1220;
+      --accent:#6ee7b7;
+      --muted:#9aa4b2;
+      --glass: rgba(255,255,255,0.03);
+    }
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;}
+    body{background:linear-gradient(180deg,#081025 0%, #071226 100%);color:#e6eef6;display:flex;align-items:center;justify-content:center;padding:24px;}
+    .card{width:100%;max-width:720px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:12px;padding:22px;box-shadow:0 6px 30px rgba(2,6,23,0.6);border:1px solid rgba(255,255,255,0.03);}
+    h1{margin:0;font-size:20px;letter-spacing:0.2px}
+    p.lead{color:var(--muted);margin-top:6px;font-size:13px}
+    .row{display:flex;gap:12px;align-items:center;margin-top:18px;}
+    label{font-size:13px;color:var(--muted);min-width:220px}
+    input[type=number]{width:110px;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:var(--glass);color:inherit;font-size:14px}
+    .small{font-size:12px;color:var(--muted)}
+    .controls{display:flex;gap:10px;margin-top:16px;align-items:center}
+    button{background:linear-gradient(90deg,var(--accent),#34d399);border:none;padding:9px 14px;border-radius:9px;color:#041118;font-weight:600;cursor:pointer}
+    button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted);}
+    .status{margin-left:auto;font-weight:700;color:var(--accent)}
+    .countBadge{background:rgba(255,255,255,0.03);padding:6px 10px;border-radius:999px;font-weight:700;border:1px solid rgba(255,255,255,0.03)}
+    .note{margin-top:14px;color:var(--muted);font-size:13px}
+    footer{margin-top:18px;color:var(--muted);font-size:12px;display:flex;justify-content:space-between;align-items:center}
+    a.link{color:var(--accent);text-decoration:none;font-weight:600}
+  </style>
 </head>
 <body>
-<div class="container">
-  <h1>So You Think You Can<br/>Be The Reply Guy</h1>
-  <p class="subtitle">Set your daily reply quota</p>
+  <div class="card" role="main">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div style="width:46px;height:46px;border-radius:10px;background:linear-gradient(180deg,var(--accent),#34d399);display:flex;align-items:center;justify-content:center;color:#021314;font-weight:800;font-size:18px">RG</div>
+      <div>
+        <h1>So You Think You Can Be the Reply Guy</h1>
+        <p class="lead">Configure your quota, check progress, and let the Reply Guy do the rest. Warning mode: browser confirmation dialog.</p>
+      </div>
+    </div>
 
-  <div class="counter-display">
-    <div class="counter-label">Current Replies</div>
-    <div class="counter-value" id="currentCount">...</div>
+    <div class="row" style="margin-top:16px;">
+      <label for="requiredReplies">Required replies before leaving</label>
+      <input id="requiredReplies" type="number" min="1" step="1" value="3" />
+      <div class="small">Set how many replies you must make on X before you can leave.</div>
+    </div>
+
+    <div class="row">
+      <label>Current count</label>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div class="countBadge" id="currentCount">—</div>
+        <div class="small">Resets once per day (based on your local browser date).</div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button id="saveBtn">Save</button>
+      <button id="resetCount" class="ghost">Reset now</button>
+      <div class="status" id="status">Saved</div>
+    </div>
+
+    <div class="note">
+      Detection is heuristic-based: the extension watches X’s reply composer & post actions. If X updates its UI, you may need to update the extension. If counting still misses replies, open the page console (DevTools → Console) and look for <code>[ReplyGuy]</code> logs for debugging.
+    </div>
+
+    <footer>
+      <div>Made with ☕ and chaos</div>
+      <div><a class="link" href="#" id="helpLink">Help / Troubleshoot</a></div>
+    </footer>
   </div>
 
-  <div class="setting-group">
-    <label for="requiredReplies">Replies Required to Leave</label>
-    <input id="requiredReplies" type="number" min="1" step="1" />
-    <div class="note">Set the minimum number of replies you want to post before you can leave X/Twitter for the day.</div>
-  </div>
-
-  <button id="resetCount">Reset Count</button>
-
-  <hr />
-
-  <div class="info-box">
-    <strong>How it works:</strong> This extension counts replies by detecting the "Replying to" text in the composer on X. If you try to leave before reaching your quota, you'll see a funny warning. Can't escape the Reply Guy life! 📱
-  </div>
-</div>
-
-<script src="options.js"></script>
+  <script src="options.js"></script>
 </body>
 </html>

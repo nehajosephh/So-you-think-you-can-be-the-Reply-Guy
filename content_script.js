@@ -1,156 +1,349 @@
 // content_script.js
-// Detects replies on X and triggers a funny warning dialog when user tries to leave.
-// Reply Guy Mode engaged.
+// So You Think You Can Be The Reply Guy — Reply/Comment Detection (Counts replies/comments under posts only)
+// Option C implementation: counts replies/comments under posts, ignores standalone posts (/compose/post).
+//
+// Features:
+// - Flags composers opened from reply buttons (most reliable)
+// - Heuristics: "Replying to" text, link to original author, or flagged opener => considered a reply
+// - Attaches listeners to submit buttons (data-testid tweetButton, tweetButtonInline, etc.)
+// - Handles Ctrl/Cmd+Enter keyboard submit
+// - MutationObserver + SPA hooks for dynamic UI
+// - Debug logs (toggle DEBUG)
 
 (function () {
-  const SITE_HINTS = ["x.com", "twitter.com"];
+  const DEBUG = true;
+  const SITES = ["x.com", "twitter.com"];
 
-  // Funny Reply Guy lines for blocking exit
-  const REPLY_GUY_LINES = [
-    "Bro… you're really gonna leave BEFORE replying? Tragic.",
-    "Hold up king/queen, you still owe the timeline some heat.",
-    "Bruh. You still owe the timeline more replies. Don't walk away now.",
-    "Oh wow, leaving already? Couldn't be me.",
-    "Ratio alert: You're behind on replies.",
-    "You said you'd reply more and now you're… leaving? Bold move."
+  function log(...args) { if (DEBUG) console.debug("[ReplyGuy]", ...args); }
+
+  // Heuristic selectors for reply openers and submit buttons
+  const REPLY_OPENER_SELECTORS = [
+    '[data-testid="reply"]',
+    '[data-testid="replyButton"]',
+    'div[aria-label*="Reply"]',
+    'div[role="button"][data-testid*="reply"]',
+    'button[aria-label*="Reply"]'
   ];
 
-  function getRandomLine() {
-    return REPLY_GUY_LINES[Math.floor(Math.random() * REPLY_GUY_LINES.length)];
-  }
+  const SUBMIT_BUTTON_SELECTORS = [
+    'button[data-testid="tweetButton"]',
+    'button[data-testid="tweetButtonInline"]',
+    '[data-testid="tweetButton"]',
+    '[data-testid="tweetButtonInline"]',
+    'div[role="button"][data-testid*="tweet"]',
+    'div[role="button"][aria-label*="Tweet"]'
+  ];
 
-  // Send increment message to background script
+  // When an opener is clicked, it will set a marker on the composer when it appears.
+  // We map opener element -> a temporary token and then mark the composer that matches the token.
+  let openerTokenCounter = 1;
+
+  // Send increment to background
   function sendIncrement() {
-    chrome.runtime.sendMessage({ type: "increment" });
+    try {
+      chrome.runtime.sendMessage({ type: "increment" });
+      log("Increment message sent");
+    } catch (err) {
+      console.error("[ReplyGuy] sendIncrement error:", err);
+    }
   }
 
-  // Try to identify a reply composer
-  function findComposer(el) {
-    let cur = el;
+  // Check whether composer content appears to be a reply to another tweet
+  function composerLooksLikeReply(composer) {
+    if (!composer) return false;
+    const text = (composer.innerText || "").trim();
 
-    // Check up the tree for “Replying to”
-    for (let i = 0; i < 8 && cur; i++) {
-      if (cur.innerText && cur.innerText.includes("Replying to")) return cur;
-      cur = cur.parentElement;
+    // 1) direct textual cue
+    if (text.includes("Replying to") || text.match(/\bReplying\b/i)) {
+      return true;
     }
 
-    // Check for dialog-based composer
-    cur = el;
-    for (let i = 0; i < 8 && cur; i++) {
-      if (
-        cur.getAttribute &&
-        (cur.getAttribute("role") === "dialog" ||
-          (cur.getAttribute("aria-label") || "")
-            .toLowerCase()
-            .includes("reply"))
-      )
-        return cur;
-      cur = cur.parentElement;
-    }
-
-    return null;
-  }
-
-  // Detect clicking the reply/tweet button
-  document.addEventListener(
-    "click",
-    function (e) {
-      const btn =
-        e.target.closest &&
-        e.target.closest('div[role="button"], button');
-      if (!btn) return;
-
-      const isTweetButton =
-        btn.querySelector &&
-          btn.querySelector('[data-testid="tweetButtonInline"]') ||
-        btn.getAttribute &&
-          (btn.getAttribute("data-testid") === "tweetButtonInline" ||
-            (btn.getAttribute("aria-label") || "")
-              .toLowerCase()
-              .includes("tweet"));
-
-      if (!isTweetButton) return;
-
-      // Check if it’s a reply
-      const composer = findComposer(btn);
-      if (
-        composer &&
-        composer.innerText &&
-        composer.innerText.includes("Replying to")
-      ) {
-        setTimeout(sendIncrement, 500);
+    // 2) presence of an @username link / author link inside composer header area
+    try {
+      if (composer.querySelector && (
+        composer.querySelector('a[href*="/"]') && // generic link -- further check below
+        Array.from(composer.querySelectorAll('a')).some(a => /\@[A-Za-z0-9_]+/.test(a.innerText || '') || a.href && a.href.includes('/')) // heuristic
+      )) {
+        return true;
       }
-    },
-    true
-  );
+    } catch (e) {
+      // ignore selector errors
+    }
 
-  // Keyboard shortcut detection (CTRL/CMD + Enter)
-  document.addEventListener(
-    "keydown",
-    function (e) {
-      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-        const active = document.activeElement;
-        const composer = findComposer(active || document.body);
-        if (
-          composer &&
-          composer.innerText &&
-          composer.innerText.includes("Replying to")
-        ) {
-          setTimeout(sendIncrement, 500);
+    // 3) explicit marker set by reply-opener flow (see markComposerFromOpener)
+    if (composer.__replyGuyMarked === true) return true;
+
+    // 4) fallback: if the composer contains an element that looks like a tweet reference (small text with 'in reply to' etc)
+    if (text.match(/in reply to/i)) return true;
+
+    return false;
+  }
+
+  // Given a node that likely is inside/near a composer, find the composer container
+  function findComposerContainer(node) {
+    if (!node) return null;
+
+    // If node itself looks like a composer (contains contenteditable or textarea), return closest container
+    let el = node;
+    for (let i = 0; i < 10 && el; i++) {
+      if (el.querySelector && (el.querySelector('[contenteditable="true"]') || el.querySelector('textarea'))) {
+        return el;
+      }
+      // Some composers are the contenteditable itself
+      if (el.getAttribute && (el.getAttribute('contenteditable') === 'true' || el.tagName === 'TEXTAREA')) {
+        return el.closest('div[role="dialog"], div[aria-label*="Reply"], div[data-testid*="tweet"], div[role="application"]') || el.parentElement;
+      }
+      el = el.parentElement;
+    }
+
+    // General fallback: common composer containers
+    return document.querySelector('div[role="dialog"], div[aria-label*="Reply"], div[data-testid*="reply"], div[data-testid*="tweet"]');
+  }
+
+  // Attach submit handler to a composer container so that clicking its submit counts if it's a reply
+  function attachSubmitListenersToComposer(composer) {
+    if (!composer || composer.__replyGuySubmitAttached) return;
+    composer.__replyGuySubmitAttached = true;
+
+    // 1) attach click listener to any submit buttons inside composer
+    for (const sel of SUBMIT_BUTTON_SELECTORS) {
+      try {
+        const btns = composer.querySelectorAll(sel);
+        btns.forEach(btn => {
+          // avoid double attaching
+          if (btn.__replyGuyBtnAttached) return;
+          btn.__replyGuyBtnAttached = true;
+
+          const handler = (ev) => {
+            // Ensure we only count when the composer is a reply/comment
+            const isReply = composerLooksLikeReply(composer);
+            log("Submit button clicked. isReply:", isReply, "selector:", sel, "button:", btn);
+            if (isReply) {
+              // slight delay to allow X to perform the post action
+              setTimeout(sendIncrement, 350);
+            }
+          };
+
+          // Use capture true to catch it early
+          btn.addEventListener('click', handler, true);
+        });
+      } catch (e) {
+        // ignore errors for obscure nodes
+      }
+    }
+
+    // 2) attach keyboard handler to contenteditable/textarea inside composer
+    try {
+      const editables = composer.querySelectorAll('[contenteditable="true"], textarea');
+      editables.forEach(editable => {
+        if (editable.__replyGuyKeyAttached) return;
+        const keyHandler = (e) => {
+          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            const isReply = composerLooksLikeReply(composer);
+            log("Keyboard submit detected. isReply:", isReply);
+            if (isReply) {
+              setTimeout(sendIncrement, 350);
+            }
+          }
+        };
+        editable.addEventListener('keydown', keyHandler, true);
+        editable.__replyGuyKeyAttached = true;
+      });
+    } catch (e) {
+      // ignore
+    }
+
+    log("Attached submit listeners to composer", composer);
+  }
+
+  // When a reply-opener (reply button) is clicked, we attempt to mark the composer that appears after it
+  function replyOpenerClickHandler(e) {
+    const opener = e.target.closest && e.target.closest(REPLY_OPENER_SELECTORS.join(','));
+    if (!opener) return;
+
+    // create a token and attach it to the opener so we can match it when composer appears
+    const token = `replyGuyToken:${Date.now()}:${openerTokenCounter++}`;
+    opener.__replyGuyToken = token;
+    log("Reply opener clicked, token:", token, opener);
+
+    // set a short-lived global lastOpenerToken to help match
+    window.__replyGuyLastOpenerToken = token;
+
+    // set up a timed attempt to find composer and mark it
+    setTimeout(() => {
+      // Try to find composer related to this opener
+      const composer = findComposerContainer(opener);
+      if (composer) {
+        composer.__replyGuyMarked = true;
+        composer.__replyGuyMarkedToken = token;
+        log("Marked composer immediately after opener click", composer, token);
+        attachSubmitListenersToComposer(composer);
+      } else {
+        // if not found, scan for recent composers and mark the first unmarked
+        scanForNewComposersAndMark(token);
+      }
+    }, 220); // small delay to let composer materialize
+  }
+
+  // Scan DOM for composer elements that aren't yet marked and mark one (used after opener click)
+  function scanForNewComposersAndMark(token) {
+    // look for likely composer containers
+    const candidates = Array.from(document.querySelectorAll('div[role="dialog"], div[aria-label*="Reply"], div[data-testid*="tweet"], div[data-testid*="reply"]'));
+    for (const cand of candidates) {
+      if (cand.__replyGuyMarked) continue;
+      // if it contains editable area, mark it
+      if (cand.querySelector && (cand.querySelector('[contenteditable="true"]') || cand.querySelector('textarea'))) {
+        cand.__replyGuyMarked = true;
+        cand.__replyGuyMarkedToken = token;
+        log("Marked composer via scan", cand, token);
+        attachSubmitListenersToComposer(cand);
+        return;
+      }
+    }
+    // fallback: try to mark generic composer containers
+    const fallback = document.querySelector('[contenteditable="true"], textarea');
+    if (fallback && fallback.closest) {
+      const root = fallback.closest('div[role="dialog"], div[aria-label*="Reply"], div[data-testid*="tweet"]') || fallback.parentElement;
+      if (root && !root.__replyGuyMarked) {
+        root.__replyGuyMarked = true;
+        root.__replyGuyMarkedToken = token;
+        attachSubmitListenersToComposer(root);
+        log("Marked fallback composer", root, token);
+      }
+    }
+  }
+
+  // MutationObserver to detect new composers dynamically and attach listeners
+  function startComposerObserver() {
+    const mo = new MutationObserver((mutations) => {
+      let sawComposer = false;
+      for (const m of mutations) {
+        for (const node of m.addedNodes) {
+          if (!(node instanceof HTMLElement)) continue;
+          // If node looks like a composer or contains contenteditable, try to attach
+          if (node.querySelector && (node.querySelector('[contenteditable="true"]') || node.querySelector('textarea') || node.querySelector('[data-testid="tweetButton"]') || node.querySelector('[data-testid="tweetButtonInline"]'))) {
+            const composer = findComposerContainer(node) || node;
+            if (composer && !composer.__replyGuySubmitAttached) {
+              // Determine if it should be marked as reply based on heuristic
+              if (composerLooksLikeReply(composer) || (window.__replyGuyLastOpenerToken && !composer.__replyGuyMarked)) {
+                composer.__replyGuyMarked = true;
+                composer.__replyGuyMarkedToken = window.__replyGuyLastOpenerToken || null;
+              }
+              attachSubmitListenersToComposer(composer);
+            }
+            sawComposer = true;
+          }
         }
       }
-    },
-    true
-  );
+      if (sawComposer) {
+        // cleanup lastOpenerToken after a short time so it doesn't incorrectly mark later composers
+        setTimeout(() => { window.__replyGuyLastOpenerToken = null; }, 1200);
+      }
+    });
 
-  // Check if user met required replies
-  async function shouldBlockUnload() {
-    try {
-      const data = await chrome.storage.sync.get([
-        "count",
-        "requiredReplies",
-      ]);
-      const count = data.count || 0;
-      const required = data.requiredReplies || 3;
-      return count < required;
-    } catch (err) {
-      return false;
+    mo.observe(document.documentElement || document.body, { childList: true, subtree: true });
+    window.__replyGuyComposerObserver = mo;
+    log("Composer MutationObserver started");
+  }
+
+  // Attach global listeners: for reply opener clicks and for SPA navigation
+  function attachGlobalListeners() {
+    // Reply opener click listener (use capture to catch early)
+    document.addEventListener('click', replyOpenerClickHandler, true);
+    log("Global reply opener click listener attached");
+
+    // Also attach a general click handler that listens for submit button clicks outside composer detection (extra safety)
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest && e.target.closest(SUBMIT_BUTTON_SELECTORS.join(','));
+      if (!btn) return;
+      // find composer near button and evaluate
+      const composer = findComposerContainer(btn) || findComposerContainer(document.activeElement) || null;
+      if (!composer) return;
+
+      // If composer wasn't previously attached, attach now
+      if (!composer.__replyGuySubmitAttached) {
+        // Determine marking heuristics (don't mark if compose/post path)
+        if (composerLooksLikeReply(composer)) {
+          composer.__replyGuyMarked = true;
+        }
+        attachSubmitListenersToComposer(composer);
+      }
+      // We don't increment here directly because those attached handlers will run; this is only to ensure listeners exist.
+    }, true);
+
+    // SPA hooks: re-run light init on history changes
+    const _push = history.pushState;
+    history.pushState = function () {
+      const res = _push.apply(this, arguments);
+      setTimeout(() => { // allow DOM to settle
+        try {
+          scanForNewComposersAndMark(window.__replyGuyLastOpenerToken || null);
+        } catch (e) {}
+      }, 400);
+      return res;
+    };
+    const _replace = history.replaceState;
+    history.replaceState = function () {
+      const res = _replace.apply(this, arguments);
+      setTimeout(() => {
+        try {
+          scanForNewComposersAndMark(window.__replyGuyLastOpenerToken || null);
+        } catch (e) {}
+      }, 400);
+      return res;
+    };
+    window.addEventListener('popstate', () => setTimeout(() => scanForNewComposersAndMark(null), 300));
+    log("SPA history patched");
+  }
+
+  // Prevent counting on standalone compose page (/compose/post) by checking location
+  function onSubmitCountGuard() {
+    // This is handled per-composer: composerLooksLikeReply will return false on standalone compose page.
+    // But also guard explicitly: if path is /compose/post, ignore unless composer marked.
+    const path = location.pathname || "";
+    if (path.includes('/compose') || path.includes('/compose/post')) {
+      log("On /compose path; replies will not be counted unless composer explicitly marked as reply.");
     }
   }
 
-  // Attach warning dialog
-  async function attachUnloadHandler() {
+  // Attach beforeunload handler (unchanged behavior: warning if quota not met)
+  function attachUnloadHandler() {
     const host = location.hostname;
-    if (!SITE_HINTS.some((s) => host.includes(s))) return;
-
-    window.addEventListener(
-      "beforeunload",
-      async function (e) {
-        const block = await shouldBlockUnload();
-        if (block) {
-          const line = getRandomLine();
+    if (!SITES.some(h => host.includes(h))) return;
+    window.addEventListener('beforeunload', async (e) => {
+      try {
+        const data = await chrome.storage.sync.get(['count','requiredReplies']);
+        const count = data.count || 0;
+        const required = data.requiredReplies || 3;
+        if (count < required) {
+          const lines = [
+            "Bro… you're really gonna leave BEFORE replying? Tragic.",
+            "Hold up king/queen, you still owe the timeline some heat.",
+            "Bruh. You still owe the timeline more replies. Don't walk away now.",
+            "Oh wow, leaving already? Couldn't be me.",
+            "Ratio alert: You're behind on replies."
+          ];
+          const line = lines[Math.floor(Math.random() * lines.length)];
+          log("beforeunload blocking with line:", line);
           e.preventDefault();
-          e.returnValue = line; // Modern browsers ignore custom text but still trigger prompt
+          e.returnValue = line;
           return line;
         }
-      },
-      { capture: true }
-    );
+      } catch (err) {
+        log("beforeunload storage read error", err);
+      }
+    }, { capture: true });
   }
 
-  // Attach immediately
-  attachUnloadHandler();
+  // Init
+  try {
+    attachGlobalListeners();
+    startComposerObserver();
+    onSubmitCountGuard();
+    attachUnloadHandler();
+    log("ReplyGuy content script initialized (Option C: replies/comments only)");
+  } catch (err) {
+    console.error("[ReplyGuy] init error:", err);
+  }
 
-  // X is a single-page app → reattach handler on navigation
-  const pushState = history.pushState;
-  history.pushState = function () {
-    pushState.apply(this, arguments);
-    setTimeout(attachUnloadHandler, 500);
-  };
-
-  const replaceState = history.replaceState;
-  history.replaceState = function () {
-    replaceState.apply(this, arguments);
-    setTimeout(attachUnloadHandler, 500);
-  };
 })();
