@@ -22,7 +22,11 @@
     '[data-testid="replyButton"]',
     'div[aria-label*="Reply"]',
     'div[role="button"][data-testid*="reply"]',
-    'button[aria-label*="Reply"]'
+    'button[aria-label*="Reply"]',
+    'button[aria-label*="reply"]',
+    'div[aria-label*="reply"]',
+    'div[aria-tooltip*="reply"]',
+    'svg[aria-label*="Reply"]'
   ];
 
   const SUBMIT_BUTTON_SELECTORS = [
@@ -31,7 +35,11 @@
     '[data-testid="tweetButton"]',
     '[data-testid="tweetButtonInline"]',
     'div[role="button"][data-testid*="tweet"]',
-    'div[role="button"][aria-label*="Tweet"]'
+    'div[role="button"][aria-label*="Tweet"]',
+    'div[role="button"][aria-label*="Post"]',
+    'button[aria-label*="Post"]',
+    'button[aria-label*="Tweet"]',
+    'div[aria-label*="Post"]'
   ];
 
   // When an opener is clicked, it will set a marker on the composer when it appears.
@@ -53,28 +61,61 @@
     if (!composer) return false;
     const text = (composer.innerText || "").trim();
 
-    // 1) direct textual cue
-    if (text.includes("Replying to") || text.match(/\bReplying\b/i)) {
+    // 1) direct textual cue - look for "Replying to", "Replying", "In reply to"
+    if (text.match(/replying\s+to|in\s+reply\s+to/i)) {
+      log("Reply detected: Found 'Replying to' text");
       return true;
     }
 
-    // 2) presence of an @username link / author link inside composer header area
+    // 2) Check for reply context elements in the DOM
     try {
-      if (composer.querySelector && (
-        composer.querySelector('a[href*="/"]') && // generic link -- further check below
-        Array.from(composer.querySelectorAll('a')).some(a => /\@[A-Za-z0-9_]+/.test(a.innerText || '') || a.href && a.href.includes('/')) // heuristic
-      )) {
-        return true;
+      // Look for "Replying to @username" spans or divs
+      if (composer.querySelector) {
+        const replyText = composer.querySelector('[aria-label*="Replying"], [aria-label*="Reply to"]');
+        if (replyText) {
+          log("Reply detected: Found reply context element via aria-label");
+          return true;
+        }
+        
+        // Look for quoted tweet or author reference
+        const quotedTweet = composer.querySelector('[data-testid="reply"], [data-testid*="quote"]');
+        if (quotedTweet) {
+          log("Reply detected: Found quoted tweet element");
+          return true;
+        }
       }
     } catch (e) {
-      // ignore selector errors
+      log("Error checking for reply elements:", e);
     }
 
     // 3) explicit marker set by reply-opener flow (see markComposerFromOpener)
-    if (composer.__replyGuyMarked === true) return true;
+    if (composer.__replyGuyMarked === true) {
+      log("Reply detected: Explicitly marked");
+      return true;
+    }
 
-    // 4) fallback: if the composer contains an element that looks like a tweet reference (small text with 'in reply to' etc)
-    if (text.match(/in reply to/i)) return true;
+    // 4) Check if this composer was opened via reply button
+    if (composer.__replyGuyMarkedToken) {
+      log("Reply detected: Has marked token");
+      return true;
+    }
+
+    // 5) Check URL - if we're on a specific tweet's page (URL contains /status/), replies are likely
+    const currentUrl = location.href || "";
+    if (currentUrl.includes('/status/') || currentUrl.includes('/i/web/status/')) {
+      log("Reply detected: On a tweet detail page (likely a reply)");
+      return true;
+    }
+
+    // 6) Check if there's a parent tweet visible near the composer (indicates reply context)
+    try {
+      if (composer.querySelector && composer.querySelector('article')) {
+        log("Reply detected: Found article element (likely reply to tweet)");
+        return true;
+      }
+    } catch (e) {
+      // ignore
+    }
 
     return false;
   }
@@ -335,13 +376,53 @@
     }, { capture: true });
   }
 
+  // Advanced detection: Monitor network requests to detect replies
+  function setupNetworkMonitoring() {
+    try {
+      // Intercept fetch calls for new tweets
+      const originalFetch = window.fetch;
+      window.fetch = function(...args) {
+        const promise = originalFetch.apply(this, args);
+        
+        promise.then(response => {
+          try {
+            // Check if this is a tweet creation endpoint
+            if (args[0] && typeof args[0] === 'string') {
+              const url = args[0];
+              if (url.includes('/2/tweets') || url.includes('CreateTweet') || url.includes('/tweets')) {
+                // Check the request body for reply context
+                const body = args[1]?.body;
+                if (body) {
+                  const bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
+                  // If it contains reply_settings or in_reply_to_tweet_id, it's a reply
+                  if (bodyStr.includes('reply') || bodyStr.includes('in_reply_to')) {
+                    log("Network monitoring: Tweet creation detected with reply context");
+                    sendIncrement();
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            // silently ignore monitoring errors
+          }
+        });
+        
+        return promise;
+      };
+      log("Network monitoring setup complete");
+    } catch (e) {
+      log("Could not setup network monitoring:", e);
+    }
+  }
+
   // Init
   try {
     attachGlobalListeners();
     startComposerObserver();
     onSubmitCountGuard();
     attachUnloadHandler();
-    log("ReplyGuy content script initialized (Option C: replies/comments only)");
+    setupNetworkMonitoring();
+    log("ReplyGuy content script initialized (Option C: replies/comments only, with enhanced detection)");
   } catch (err) {
     console.error("[ReplyGuy] init error:", err);
   }
