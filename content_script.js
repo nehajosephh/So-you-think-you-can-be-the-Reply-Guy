@@ -46,32 +46,37 @@
   // We map opener element -> a temporary token and then mark the composer that matches the token.
   let openerTokenCounter = 1;
 
-  // Increment counter directly in storage (ultra-bulletproof version)
+  // Increment counter directly in storage with context check
   function sendIncrement() {
-    if (!window.chrome || !window.chrome.storage || !window.chrome.storage.sync) {
-      return; // Silently fail if chrome API not available
-    }
-
     try {
-      window.chrome.storage.sync.get(["count", "requiredReplies"], function(data) {
+      // Check if extension context is still valid before accessing chrome API
+      if (!chrome || !chrome.runtime || !chrome.runtime.id) {
+        return; // Context invalidated, silently exit
+      }
+
+      if (!chrome.storage || !chrome.storage.sync) {
+        return;
+      }
+
+      chrome.storage.sync.get(["count", "requiredReplies"], function(data) {
+        // Double-check context is still valid in callback
+        if (!chrome || !chrome.runtime || !chrome.runtime.id) {
+          return;
+        }
+
         if (!data) return;
         
-        try {
-          const currentCount = parseInt(data.count) || 0;
-          const required = parseInt(data.requiredReplies) || 3;
-          const newCount = currentCount + 1;
-          
-          window.chrome.storage.sync.set({ count: newCount }, function() {
-            if (window.chrome && window.chrome.runtime && !window.chrome.runtime.lastError) {
-              log(`✓ Reply ${newCount}/${required}`);
-            }
-          });
-        } catch (e) {
-          // Silent fail
-        }
+        const currentCount = parseInt(data.count) || 0;
+        const required = parseInt(data.requiredReplies) || 3;
+        const newCount = currentCount + 1;
+        
+        chrome.storage.sync.set({ count: newCount }, function() {
+          // Silent success - no error logging
+        });
       });
     } catch (e) {
-      // Silent fail
+      // Silent fail - extension context likely invalidated
+      return;
     }
   }
 
