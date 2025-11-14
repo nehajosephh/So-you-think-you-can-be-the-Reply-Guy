@@ -94,9 +94,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 });
 
-// Also respond to storage changes
-chrome.storage.onChanged.addListener(() => {
-  updateBadge();
+// Also respond to storage changes (content script updates count directly now)
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === 'sync' && (changes.count || changes.requiredReplies)) {
+    console.log("[ReplyGuy] Storage changed, updating badge");
+    updateBadge();
+  }
 });
 
 // Periodic check for daily reset (every 30 minutes)

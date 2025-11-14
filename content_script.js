@@ -46,40 +46,22 @@
   // We map opener element -> a temporary token and then mark the composer that matches the token.
   let openerTokenCounter = 1;
 
-  // Send increment to background with retry logic
-  function sendIncrement() {
-    const sendWithRetry = (retries = 3) => {
-      try {
-        // Check if extension context is still valid
-        if (!chrome?.runtime?.sendMessage) {
-          log("Extension context invalidated, scheduling retry");
-          if (retries > 0) {
-            setTimeout(() => sendWithRetry(retries - 1), 2000);
-          }
-          return;
-        }
-        
-        chrome.runtime.sendMessage({ type: "increment" }, (response) => {
-          if (chrome.runtime.lastError) {
-            log("sendIncrement - lastError:", chrome.runtime.lastError.message);
-            // Retry on error
-            if (retries > 0) {
-              setTimeout(() => sendWithRetry(retries - 1), 2000);
-            }
-          } else if (response?.success) {
-            log("Increment successful! Count:", response.count);
-          }
-        });
-      } catch (err) {
-        // Silently handle errors and retry
-        log("sendIncrement error:", err.message, "- retries left:", retries);
-        if (retries > 0) {
-          setTimeout(() => sendWithRetry(retries - 1), 2000);
-        }
-      }
-    };
-    
-    sendWithRetry();
+  // Increment counter directly in storage (more reliable than chrome.runtime)
+  async function sendIncrement() {
+    try {
+      // Get current count and required replies
+      const data = await chrome.storage.sync.get(["count", "requiredReplies"]);
+      const currentCount = data.count || 0;
+      const required = data.requiredReplies || 3;
+      
+      // Increment and save
+      const newCount = currentCount + 1;
+      await chrome.storage.sync.set({ count: newCount });
+      
+      log(`Reply counted! ${newCount} / ${required}`);
+    } catch (err) {
+      console.error("[ReplyGuy] sendIncrement error:", err);
+    }
   }
 
   // Check whether composer content appears to be a reply to another tweet
