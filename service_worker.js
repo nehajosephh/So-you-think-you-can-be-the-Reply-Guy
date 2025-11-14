@@ -54,15 +54,24 @@ ensureDefaults();
 // Listen for increments from content script
 chrome.runtime.onMessage.addListener(async (msg, sender) => {
 if (msg && msg.type === 'increment') {
+try {
 await maybeDailyReset();
 const data = await chrome.storage.sync.get(["count"]);
 const newCount = (data.count || 0) + 1;
 await chrome.storage.sync.set({ count: newCount });
 updateBadge();
+console.log("[ReplyGuy] Reply counted! New count:", newCount);
+} catch (err) {
+console.error("[ReplyGuy] Error incrementing count:", err);
+}
 }
 if (msg && msg.type === 'resetCount') {
+try {
 await chrome.storage.sync.set({ count: 0, lastResetDate: isoDateToday() });
 updateBadge();
+} catch (err) {
+console.error("[ReplyGuy] Error resetting count:", err);
+}
 }
 });
 

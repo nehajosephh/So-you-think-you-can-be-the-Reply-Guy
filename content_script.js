@@ -49,10 +49,26 @@
   // Send increment to background
   function sendIncrement() {
     try {
-      chrome.runtime.sendMessage({ type: "increment" });
-      log("Increment message sent");
+      // Check if extension context is still valid
+      if (!chrome?.runtime?.sendMessage) {
+        log("Extension context invalidated, skipping increment");
+        return;
+      }
+      
+      chrome.runtime.sendMessage({ type: "increment" }, (response) => {
+        if (chrome.runtime.lastError) {
+          log("sendIncrement - lastError:", chrome.runtime.lastError.message);
+        } else {
+          log("Increment message sent successfully");
+        }
+      });
     } catch (err) {
-      console.error("[ReplyGuy] sendIncrement error:", err);
+      // Silently handle "Extension context invalidated" errors
+      if (err.message && err.message.includes('invalidated')) {
+        log("Extension context invalidated (extension was reloaded)");
+      } else {
+        console.error("[ReplyGuy] sendIncrement error:", err);
+      }
     }
   }
 
@@ -415,6 +431,22 @@
     }
   }
 
+  // Setup a periodic check to detect if extension context is lost
+  function setupContextMonitor() {
+    setInterval(() => {
+      try {
+        // Test if chrome.runtime is still accessible
+        if (!chrome?.runtime) {
+          log("Chrome runtime lost, attempting to reload...");
+          // Reload the page to reinject the content script
+          location.reload();
+        }
+      } catch (e) {
+        log("Context monitor error:", e);
+      }
+    }, 5000); // Check every 5 seconds
+  }
+
   // Init
   try {
     attachGlobalListeners();
@@ -422,6 +454,7 @@
     onSubmitCountGuard();
     attachUnloadHandler();
     setupNetworkMonitoring();
+    setupContextMonitor();
     log("ReplyGuy content script initialized (Option C: replies/comments only, with enhanced detection)");
   } catch (err) {
     console.error("[ReplyGuy] init error:", err);
