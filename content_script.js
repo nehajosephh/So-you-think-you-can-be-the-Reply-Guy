@@ -46,34 +46,29 @@
   // We map opener element -> a temporary token and then mark the composer that matches the token.
   let openerTokenCounter = 1;
 
-  // Increment counter directly in storage (more reliable than chrome.runtime)
+  // Increment counter directly in storage (bulletproof version)
   function sendIncrement() {
     try {
-      // Get current count and required replies
-      chrome.storage.sync.get(["count", "requiredReplies"], (data) => {
+      if (!chrome || !chrome.storage || !chrome.storage.sync) {
+        log("Chrome storage not available");
+        return;
+      }
+
+      chrome.storage.sync.get(["count", "requiredReplies"], function(data) {
         try {
-          if (chrome.runtime.lastError) {
-            log("Storage error:", chrome.runtime.lastError);
-            return;
-          }
-          const currentCount = data.count || 0;
-          const required = data.requiredReplies || 3;
-          
-          // Increment and save
+          const currentCount = (data && data.count) ? data.count : 0;
+          const required = (data && data.requiredReplies) ? data.requiredReplies : 3;
           const newCount = currentCount + 1;
-          chrome.storage.sync.set({ count: newCount }, () => {
-            if (chrome.runtime.lastError) {
-              log("Set storage error:", chrome.runtime.lastError);
-            } else {
-              log(`Reply counted! ${newCount} / ${required}`);
-            }
+          
+          chrome.storage.sync.set({ count: newCount }, function() {
+            log(`✓ Reply counted! ${newCount} / ${required}`);
           });
-        } catch (err) {
-          log("Storage callback error:", err);
+        } catch (e) {
+          log("Error in storage callback:", e.message);
         }
       });
-    } catch (err) {
-      log("sendIncrement error:", err);
+    } catch (e) {
+      log("Error in sendIncrement:", e.message);
     }
   }
 
