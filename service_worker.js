@@ -1,84 +1,108 @@
 // service_worker.js
 const DEFAULT_REQUIRED = 3;
 
+console.log("[ReplyGuy] Service worker starting...");
 
 async function ensureDefaults() {
-const data = await chrome.storage.sync.get(["requiredReplies", "count", "lastResetDate"]);
-if (data.requiredReplies == null) await chrome.storage.sync.set({ requiredReplies: DEFAULT_REQUIRED });
-if (data.count == null) await chrome.storage.sync.set({ count: 0 });
-if (!data.lastResetDate) await chrome.storage.sync.set({ lastResetDate: new Date().toISOString().slice(0,10) });
-updateBadge();
+  try {
+    const data = await chrome.storage.sync.get(["requiredReplies", "count", "lastResetDate"]);
+    if (data.requiredReplies == null) await chrome.storage.sync.set({ requiredReplies: DEFAULT_REQUIRED });
+    if (data.count == null) await chrome.storage.sync.set({ count: 0 });
+    if (!data.lastResetDate) await chrome.storage.sync.set({ lastResetDate: new Date().toISOString().slice(0,10) });
+    updateBadge();
+  } catch (err) {
+    console.error("[ReplyGuy] ensureDefaults error:", err);
+  }
 }
-
 
 function isoDateToday() {
-return new Date().toISOString().slice(0,10);
+  return new Date().toISOString().slice(0,10);
 }
-
 
 async function maybeDailyReset() {
-const data = await chrome.storage.sync.get(["lastResetDate"]);
-const today = isoDateToday();
-if (!data.lastResetDate) {
-await chrome.storage.sync.set({ lastResetDate: today });
-return;
+  try {
+    const data = await chrome.storage.sync.get(["lastResetDate"]);
+    const today = isoDateToday();
+    if (!data.lastResetDate) {
+      await chrome.storage.sync.set({ lastResetDate: today });
+      return;
+    }
+    if (data.lastResetDate !== today) {
+      await chrome.storage.sync.set({ count: 0, lastResetDate: today });
+      updateBadge();
+    }
+  } catch (err) {
+    console.error("[ReplyGuy] maybeDailyReset error:", err);
+  }
 }
-if (data.lastResetDate !== today) {
-await chrome.storage.sync.set({ count: 0, lastResetDate: today });
-updateBadge();
-}
-}
-
 
 async function updateBadge() {
-const data = await chrome.storage.sync.get(["count", "requiredReplies"]);
-const count = data.count || 0;
-const required = data.requiredReplies || DEFAULT_REQUIRED;
-const text = String(count);
-chrome.action.setBadgeText({ text });
-chrome.action.setBadgeBackgroundColor({ color: [60,60,60,255] });
-chrome.action.setTitle({ title: `Replies: ${count} / ${required}` });
+  try {
+    const data = await chrome.storage.sync.get(["count", "requiredReplies"]);
+    const count = data.count || 0;
+    const required = data.requiredReplies || DEFAULT_REQUIRED;
+    const text = String(count);
+    chrome.action.setBadgeText({ text });
+    chrome.action.setBadgeBackgroundColor({ color: [60,60,60,255] });
+    chrome.action.setTitle({ title: `Replies: ${count} / ${required}` });
+  } catch (err) {
+    console.error("[ReplyGuy] updateBadge error:", err);
+  }
 }
-
 
 chrome.runtime.onInstalled.addListener(() => {
-ensureDefaults();
+  console.log("[ReplyGuy] Extension installed");
+  ensureDefaults();
 });
-
 
 chrome.runtime.onStartup.addListener(() => {
-ensureDefaults();
+  console.log("[ReplyGuy] Extension startup");
+  ensureDefaults();
 });
-
 
 // Listen for increments from content script
-chrome.runtime.onMessage.addListener(async (msg, sender) => {
-if (msg && msg.type === 'increment') {
-try {
-await maybeDailyReset();
-const data = await chrome.storage.sync.get(["count"]);
-const newCount = (data.count || 0) + 1;
-await chrome.storage.sync.set({ count: newCount });
-updateBadge();
-console.log("[ReplyGuy] Reply counted! New count:", newCount);
-} catch (err) {
-console.error("[ReplyGuy] Error incrementing count:", err);
-}
-}
-if (msg && msg.type === 'resetCount') {
-try {
-await chrome.storage.sync.set({ count: 0, lastResetDate: isoDateToday() });
-updateBadge();
-} catch (err) {
-console.error("[ReplyGuy] Error resetting count:", err);
-}
-}
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg && msg.type === 'increment') {
+    (async () => {
+      try {
+        await maybeDailyReset();
+        const data = await chrome.storage.sync.get(["count"]);
+        const newCount = (data.count || 0) + 1;
+        await chrome.storage.sync.set({ count: newCount });
+        await updateBadge();
+        console.log("[ReplyGuy] Reply counted! New count:", newCount);
+        sendResponse({ success: true, count: newCount });
+      } catch (err) {
+        console.error("[ReplyGuy] Error incrementing count:", err);
+        sendResponse({ success: false, error: err.message });
+      }
+    })();
+    return true; // Keep channel open for async response
+  }
+  if (msg && msg.type === 'resetCount') {
+    (async () => {
+      try {
+        await chrome.storage.sync.set({ count: 0, lastResetDate: isoDateToday() });
+        await updateBadge();
+        sendResponse({ success: true });
+      } catch (err) {
+        console.error("[ReplyGuy] Error resetting count:", err);
+        sendResponse({ success: false, error: err.message });
+      }
+    })();
+    return true;
+  }
 });
 
+// Also respond to storage changes
+chrome.storage.onChanged.addListener(() => {
+  updateBadge();
+});
 
-// Also expose a short command to refresh badge when options change
-chrome.storage.onChanged.addListener(() => updateBadge());
+// Periodic check for daily reset (every 30 minutes)
+setInterval(maybeDailyReset, 1000 * 60 * 30);
 
+// Ensure defaults are set when service worker starts
+ensureDefaults();
 
-// Periodic check for daily reset (simple interval)
-setInterval(maybeDailyReset, 1000 * 60 * 30); // every 30 minutes
+console.log("[ReplyGuy] Service worker ready");

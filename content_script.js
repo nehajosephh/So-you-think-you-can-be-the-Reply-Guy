@@ -46,30 +46,40 @@
   // We map opener element -> a temporary token and then mark the composer that matches the token.
   let openerTokenCounter = 1;
 
-  // Send increment to background
+  // Send increment to background with retry logic
   function sendIncrement() {
-    try {
-      // Check if extension context is still valid
-      if (!chrome?.runtime?.sendMessage) {
-        log("Extension context invalidated, skipping increment");
-        return;
-      }
-      
-      chrome.runtime.sendMessage({ type: "increment" }, (response) => {
-        if (chrome.runtime.lastError) {
-          log("sendIncrement - lastError:", chrome.runtime.lastError.message);
-        } else {
-          log("Increment message sent successfully");
+    const sendWithRetry = (retries = 3) => {
+      try {
+        // Check if extension context is still valid
+        if (!chrome?.runtime?.sendMessage) {
+          log("Extension context invalidated, scheduling retry");
+          if (retries > 0) {
+            setTimeout(() => sendWithRetry(retries - 1), 2000);
+          }
+          return;
         }
-      });
-    } catch (err) {
-      // Silently handle "Extension context invalidated" errors
-      if (err.message && err.message.includes('invalidated')) {
-        log("Extension context invalidated (extension was reloaded)");
-      } else {
-        console.error("[ReplyGuy] sendIncrement error:", err);
+        
+        chrome.runtime.sendMessage({ type: "increment" }, (response) => {
+          if (chrome.runtime.lastError) {
+            log("sendIncrement - lastError:", chrome.runtime.lastError.message);
+            // Retry on error
+            if (retries > 0) {
+              setTimeout(() => sendWithRetry(retries - 1), 2000);
+            }
+          } else if (response?.success) {
+            log("Increment successful! Count:", response.count);
+          }
+        });
+      } catch (err) {
+        // Silently handle errors and retry
+        log("sendIncrement error:", err.message, "- retries left:", retries);
+        if (retries > 0) {
+          setTimeout(() => sendWithRetry(retries - 1), 2000);
+        }
       }
-    }
+    };
+    
+    sendWithRetry();
   }
 
   // Check whether composer content appears to be a reply to another tweet
