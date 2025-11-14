@@ -14,6 +14,15 @@
   const DEBUG = false;
   const SITES = ["x.com", "twitter.com"];
 
+  // Global error handler to suppress extension context errors
+  window.addEventListener('error', function(e) {
+    if (e.message && e.message.includes('Extension context invalidated')) {
+      e.preventDefault();
+      e.stopPropagation();
+      return true;
+    }
+  }, true);
+
   function log(...args) { if (DEBUG) console.debug("[ReplyGuy]", ...args); }
 
   // Heuristic selectors for reply openers and submit buttons
@@ -46,37 +55,61 @@
   // We map opener element -> a temporary token and then mark the composer that matches the token.
   let openerTokenCounter = 1;
 
-  // Increment counter directly in storage with context check
+  // Increment counter with aggressive error suppression
   function sendIncrement() {
+    // Wrap in try-catch to suppress any errors completely
     try {
-      // Check if extension context is still valid before accessing chrome API
-      if (!chrome || !chrome.runtime || !chrome.runtime.id) {
-        return; // Context invalidated, silently exit
-      }
-
-      if (!chrome.storage || !chrome.storage.sync) {
+      // Verify extension context multiple times
+      const runtimeId = chrome?.runtime?.id;
+      const storageSync = chrome?.storage?.sync;
+      
+      if (!runtimeId || !storageSync) {
         return;
       }
 
-      chrome.storage.sync.get(["count", "requiredReplies"], function(data) {
-        // Double-check context is still valid in callback
-        if (!chrome || !chrome.runtime || !chrome.runtime.id) {
-          return;
-        }
-
-        if (!data) return;
-        
-        const currentCount = parseInt(data.count) || 0;
-        const required = parseInt(data.requiredReplies) || 3;
-        const newCount = currentCount + 1;
-        
-        chrome.storage.sync.set({ count: newCount }, function() {
-          // Silent success - no error logging
+      // Use getBackgroundPage as a context check
+      if (chrome.runtime.getBackgroundPage) {
+        chrome.runtime.getBackgroundPage((bgPage) => {
+          if (!bgPage || chrome.runtime.lastError) {
+            return; // Context invalid
+          }
+          performIncrement();
         });
-      });
-    } catch (e) {
-      // Silent fail - extension context likely invalidated
-      return;
+      } else {
+        performIncrement();
+      }
+
+      function performIncrement() {
+        try {
+          if (!chrome?.runtime?.id) return;
+          
+          storageSync.get(["count", "requiredReplies"], function(data) {
+            try {
+              if (!chrome?.runtime?.id) return;
+              if (!data) return;
+              
+              const currentCount = parseInt(data.count) || 0;
+              const required = parseInt(data.requiredReplies) || 3;
+              const newCount = currentCount + 1;
+              
+              if (chrome?.storage?.sync?.set) {
+                chrome.storage.sync.set({ count: newCount }, function() {
+                  // Silently complete
+                });
+              }
+            } catch (innerErr) {
+              // Completely suppress inner errors
+              void(0);
+            }
+          });
+        } catch (midErr) {
+          // Completely suppress mid-level errors
+          void(0);
+        }
+      }
+    } catch (outerErr) {
+      // Completely suppress outer errors - this prevents console errors
+      void(0);
     }
   }
 
