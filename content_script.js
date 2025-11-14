@@ -47,20 +47,33 @@
   let openerTokenCounter = 1;
 
   // Increment counter directly in storage (more reliable than chrome.runtime)
-  async function sendIncrement() {
+  function sendIncrement() {
     try {
       // Get current count and required replies
-      const data = await chrome.storage.sync.get(["count", "requiredReplies"]);
-      const currentCount = data.count || 0;
-      const required = data.requiredReplies || 3;
-      
-      // Increment and save
-      const newCount = currentCount + 1;
-      await chrome.storage.sync.set({ count: newCount });
-      
-      log(`Reply counted! ${newCount} / ${required}`);
+      chrome.storage.sync.get(["count", "requiredReplies"], (data) => {
+        try {
+          if (chrome.runtime.lastError) {
+            log("Storage error:", chrome.runtime.lastError);
+            return;
+          }
+          const currentCount = data.count || 0;
+          const required = data.requiredReplies || 3;
+          
+          // Increment and save
+          const newCount = currentCount + 1;
+          chrome.storage.sync.set({ count: newCount }, () => {
+            if (chrome.runtime.lastError) {
+              log("Set storage error:", chrome.runtime.lastError);
+            } else {
+              log(`Reply counted! ${newCount} / ${required}`);
+            }
+          });
+        } catch (err) {
+          log("Storage callback error:", err);
+        }
+      });
     } catch (err) {
-      console.error("[ReplyGuy] sendIncrement error:", err);
+      log("sendIncrement error:", err);
     }
   }
 
