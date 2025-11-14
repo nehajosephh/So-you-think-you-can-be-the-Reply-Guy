@@ -11,7 +11,7 @@
 // - Debug logs (toggle DEBUG)
 
 (function () {
-  const DEBUG = true;
+  const DEBUG = false;
   const SITES = ["x.com", "twitter.com"];
 
   function log(...args) { if (DEBUG) console.debug("[ReplyGuy]", ...args); }
@@ -46,29 +46,32 @@
   // We map opener element -> a temporary token and then mark the composer that matches the token.
   let openerTokenCounter = 1;
 
-  // Increment counter directly in storage (bulletproof version)
+  // Increment counter directly in storage (ultra-bulletproof version)
   function sendIncrement() {
-    try {
-      if (!chrome || !chrome.storage || !chrome.storage.sync) {
-        log("Chrome storage not available");
-        return;
-      }
+    if (!window.chrome || !window.chrome.storage || !window.chrome.storage.sync) {
+      return; // Silently fail if chrome API not available
+    }
 
-      chrome.storage.sync.get(["count", "requiredReplies"], function(data) {
+    try {
+      window.chrome.storage.sync.get(["count", "requiredReplies"], function(data) {
+        if (!data) return;
+        
         try {
-          const currentCount = (data && data.count) ? data.count : 0;
-          const required = (data && data.requiredReplies) ? data.requiredReplies : 3;
+          const currentCount = parseInt(data.count) || 0;
+          const required = parseInt(data.requiredReplies) || 3;
           const newCount = currentCount + 1;
           
-          chrome.storage.sync.set({ count: newCount }, function() {
-            log(`✓ Reply counted! ${newCount} / ${required}`);
+          window.chrome.storage.sync.set({ count: newCount }, function() {
+            if (window.chrome && window.chrome.runtime && !window.chrome.runtime.lastError) {
+              log(`✓ Reply ${newCount}/${required}`);
+            }
           });
         } catch (e) {
-          log("Error in storage callback:", e.message);
+          // Silent fail
         }
       });
     } catch (e) {
-      log("Error in sendIncrement:", e.message);
+      // Silent fail
     }
   }
 
