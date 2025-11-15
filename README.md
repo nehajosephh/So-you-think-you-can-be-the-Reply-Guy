@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-# So-you-think-you-can-be-the-Reply-Guy
-=======
 # **So You Think You Can Be the Reply Guy**
 ### *A Chrome extension that makes sure you never leave X before fulfilling your sacred duty: replying to strangers.*
 
