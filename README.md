@@ -29,7 +29,7 @@ Then congratulations. You’ve found your calling.
 - ✔️ Works on **https://x.com** and **https://twitter.com**
 
 
-## 😂 Sample “Reply Guy” Roast Lines
+## 😂 Sample “Reply Guy” Roast Lines - coming soon-
 
 > *“Bro… you’re really gonna leave BEFORE replying? Tragic.”*
 
@@ -63,5 +63,3 @@ The extension should now appear with its little badge counter.
 5. Return to the replies.  
 6. Become stronger.
 
-
->>>>>>> 14c2397d6ca2fb324dfda302a39292269f553c1c
