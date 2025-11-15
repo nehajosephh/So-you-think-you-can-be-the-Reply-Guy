@@ -14,6 +14,15 @@
   const DEBUG = false;
   const SITES = ["x.com", "twitter.com"];
 
+  // Global error handler to suppress extension context errors
+  window.addEventListener('error', function(e) {
+    if (e.message && e.message.includes('Extension context invalidated')) {
+      e.preventDefault();
+      e.stopPropagation();
+      return true;
+    }
+  }, true);
+
   function log(...args) { if (DEBUG) console.debug("[ReplyGuy]", ...args); }
 
   // Heuristic selectors for reply openers and submit buttons
@@ -355,6 +364,7 @@
     const host = location.hostname;
     if (!SITES.some(h => host.includes(h))) return;
     
+    // Main beforeunload handler
     const beforeUnloadHandler = async (e) => {
       try {
         const data = await chrome.storage.sync.get(['count','requiredReplies']);
@@ -371,24 +381,20 @@
           ];
           const line = lines[Math.floor(Math.random() * lines.length)];
           
-          // Modern Chrome behavior: show confirmation dialog
+          // Set both preventDefault and returnValue for maximum compatibility
           e.preventDefault();
           e.returnValue = line;
           
-          // Also log for debugging
-          if (DEBUG) log("beforeunload blocking with line:", line);
-          return line;
+          if (DEBUG) log("beforeunload blocking:", line);
+          return false; // Return false to block
         }
       } catch (err) {
-        if (DEBUG) log("beforeunload storage read error", err);
+        if (DEBUG) log("beforeunload error:", err);
       }
     };
     
-    // Add event listener with capture phase for maximum reliability
-    window.addEventListener('beforeunload', beforeUnloadHandler, { capture: true });
-    
-    // Also handle unload for SPA navigation
-    window.addEventListener('unload', beforeUnloadHandler, { capture: true });
+    // Add with capture to intercept early
+    window.addEventListener('beforeunload', beforeUnloadHandler, true);
   }
 
   // Advanced detection: Monitor network requests to detect replies
