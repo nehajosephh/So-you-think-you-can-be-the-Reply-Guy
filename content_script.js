@@ -354,11 +354,13 @@
   function attachUnloadHandler() {
     const host = location.hostname;
     if (!SITES.some(h => host.includes(h))) return;
-    window.addEventListener('beforeunload', async (e) => {
+    
+    const beforeUnloadHandler = async (e) => {
       try {
         const data = await chrome.storage.sync.get(['count','requiredReplies']);
         const count = data.count || 0;
         const required = data.requiredReplies || 3;
+        
         if (count < required) {
           const lines = [
             "Bro… you're really gonna leave BEFORE replying? Tragic.",
@@ -368,15 +370,25 @@
             "Ratio alert: You're behind on replies."
           ];
           const line = lines[Math.floor(Math.random() * lines.length)];
-          log("beforeunload blocking with line:", line);
+          
+          // Modern Chrome behavior: show confirmation dialog
           e.preventDefault();
           e.returnValue = line;
+          
+          // Also log for debugging
+          if (DEBUG) log("beforeunload blocking with line:", line);
           return line;
         }
       } catch (err) {
-        log("beforeunload storage read error", err);
+        if (DEBUG) log("beforeunload storage read error", err);
       }
-    }, { capture: true });
+    };
+    
+    // Add event listener with capture phase for maximum reliability
+    window.addEventListener('beforeunload', beforeUnloadHandler, { capture: true });
+    
+    // Also handle unload for SPA navigation
+    window.addEventListener('unload', beforeUnloadHandler, { capture: true });
   }
 
   // Advanced detection: Monitor network requests to detect replies
