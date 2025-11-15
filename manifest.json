@@ -1,7 +1,7 @@
 {
 "manifest_version": 3,
 "name": "So You Think You Can Be The Reply Guy",
-"version": "2.6.0",
+"version": "2.7.0",
 "description": "Count replies on X and roast you like a certified Reply Guy if you try to dip before reaching your quota.",
 "permissions": [
 "storage",

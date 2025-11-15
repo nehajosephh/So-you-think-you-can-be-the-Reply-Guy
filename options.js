@@ -26,18 +26,20 @@ saveBtn.addEventListener('click', async () => {
   if (!v || v < 1) v = 1;
   await chrome.storage.sync.set({ requiredReplies: v });
   showStatus('Saved', true);
-  // update badge via storage change event; also send a message if needed
-  try { chrome.runtime.sendMessage({ type: 'refreshBadge' }); } catch(e){/*ignore*/ }
 });
 
 resetBtn.addEventListener('click', async () => {
-  await chrome.runtime.sendMessage({ type: 'resetCount' });
-  // small delay to show the storage update
-  setTimeout(async () => {
-    const data = await chrome.storage.sync.get(['count']);
-    currentCountEl.innerText = (data.count != null) ? String(data.count) : '0';
+  try {
+    // Reset count and update last reset date
+    const today = new Date().toISOString().slice(0, 10);
+    await chrome.storage.sync.set({ count: 0, lastResetDate: today });
+    
+    // Update UI
+    currentCountEl.innerText = '0';
     showStatus('Reset', true);
-  }, 250);
+  } catch (err) {
+    showStatus('Reset failed', true);
+  }
 });
 
 // Live update current count when storage changes
