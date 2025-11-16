@@ -14,7 +14,7 @@
 "*://*.twitter.com/*"
 ],
 "action": {
-"default_title": "X Reply Lock",
+"default_title": "So You Think You Can Be The Reply Guy",
 "default_popup": "options.html"
 },
 "background": {

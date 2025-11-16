@@ -6,55 +6,208 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
     :root{
-      --bg:#0f1724;
-      --card:#0b1220;
-      --accent:#6ee7b7;
-      --muted:#9aa4b2;
-      --glass: rgba(255,255,255,0.03);
+      --bg:#f2f4f8;
+      --card:rgba(255,255,255,0.55);
+      --accent:#72e0a8;
+      --accent2:#a4d4ff;
+      --muted:#5f6b7a;
+      --glass:rgba(255,255,255,0.45);
     }
-    html,body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;}
-    body{background:linear-gradient(180deg,#081025 0%, #071226 100%);color:#e6eef6;display:flex;align-items:center;justify-content:center;padding:24px;}
-    .card{width:100%;max-width:720px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:12px;padding:22px;box-shadow:0 6px 30px rgba(2,6,23,0.6);border:1px solid rgba(255,255,255,0.03);}
-    h1{margin:0;font-size:20px;letter-spacing:0.2px}
-    p.lead{color:var(--muted);margin-top:6px;font-size:13px}
-    .row{display:flex;gap:12px;align-items:center;margin-top:18px;}
-    label{font-size:13px;color:var(--muted);min-width:220px}
-    input[type=number]{width:110px;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:var(--glass);color:inherit;font-size:14px}
-    .small{font-size:12px;color:var(--muted)}
-    .controls{display:flex;gap:10px;margin-top:16px;align-items:center}
-    button{background:linear-gradient(90deg,var(--accent),#34d399);border:none;padding:9px 14px;border-radius:9px;color:#041118;font-weight:600;cursor:pointer}
-    button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted);}
-    .status{margin-left:auto;font-weight:700;color:var(--accent)}
-    .countBadge{background:rgba(255,255,255,0.03);padding:6px 10px;border-radius:999px;font-weight:700;border:1px solid rgba(255,255,255,0.03)}
-    .note{margin-top:14px;color:var(--muted);font-size:13px}
-    footer{margin-top:18px;color:var(--muted);font-size:12px;display:flex;justify-content:space-between;align-items:center}
-    a.link{color:var(--accent);text-decoration:none;font-weight:600}
+
+    html,body{
+      height:100%;
+      margin:0;
+      font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;
+    }
+
+    body{
+      background:linear-gradient(180deg,#f9fafc 0%, #eef1f6 100%);
+      color:#1a1f25;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:32px;
+    }
+
+    /* CARD */
+    .card{
+      width:100%;
+      max-width:780px;
+      background:var(--card);
+      backdrop-filter:blur(22px) saturate(180%);
+      -webkit-backdrop-filter:blur(22px) saturate(180%);
+      border-radius:18px;
+      padding:28px;
+
+      border:1px solid rgba(255,255,255,0.4);
+      box-shadow:
+        0 8px 28px rgba(0,0,0,0.08),
+        inset 0 0 0.5px rgba(255,255,255,0.7);
+    }
+
+    /* HEADER */
+    h1{
+      margin:0;
+      font-size:22px;
+      letter-spacing:0.2px;
+      font-weight:700;
+    }
+
+    p.lead{
+      color:var(--muted);
+      margin-top:6px;
+      font-size:14px;
+    }
+
+    .headerIcon{
+      width:46px;
+      height:46px;
+      border-radius:12px;
+      background:linear-gradient(180deg,var(--accent),var(--accent2));
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      color:#fff;
+      font-weight:800;
+      font-size:18px;
+      box-shadow:0 4px 14px rgba(0,0,0,0.12);
+    }
+
+    /* ROWS */
+    .row{
+      display:flex;
+      gap:12px;
+      align-items:center;
+      margin-top:18px;
+    }
+
+    label{
+      font-size:14px;
+      color:var(--muted);
+      min-width:220px;
+    }
+
+    /* INPUT */
+    input[type=number]{
+      width:110px;
+      padding:11px;
+      border-radius:10px;
+      border:1px solid rgba(255,255,255,0.5);
+      background:var(--glass);
+      backdrop-filter:blur(15px);
+
+      color:#1a1f25;
+      font-size:14px;
+      box-shadow:0 2px 6px rgba(0,0,0,0.08);
+    }
+
+    .small{
+      font-size:12px;
+      color:var(--muted);
+    }
+
+    /* BUTTONS */
+    .controls{
+      display:flex;
+      gap:10px;
+      margin-top:20px;
+      align-items:center;
+    }
+
+    button{
+      background:linear-gradient(90deg,var(--accent),var(--accent2));
+      border:none;
+      padding:10px 16px;
+      border-radius:12px;
+      color:#fff;
+      font-weight:600;
+      cursor:pointer;
+      box-shadow:0 4px 12px rgba(0,0,0,0.12);
+      transition:0.15s ease;
+    }
+
+    button:hover{
+      transform:translateY(-2px);
+      box-shadow:0 6px 16px rgba(0,0,0,0.15);
+    }
+
+    button.ghost{
+      background:rgba(255,255,255,0.4);
+      border:1px solid rgba(255,255,255,0.7);
+      color:#4d5661;
+      backdrop-filter:blur(12px);
+    }
+
+    .status{
+      margin-left:auto;
+      font-weight:700;
+      color:#3bb579;
+    }
+
+    /* BADGE */
+    .countBadge{
+      background:rgba(255,255,255,0.5);
+      backdrop-filter:blur(10px);
+      padding:6px 10px;
+      border-radius:999px;
+      font-weight:700;
+      border:1px solid rgba(255,255,255,0.6);
+      box-shadow:0 2px 6px rgba(0,0,0,0.06);
+    }
+
+    /* FOOTER */
+    .note{
+      margin-top:14px;
+      color:var(--muted);
+      font-size:13px;
+    }
+
+    footer{
+      margin-top:18px;
+      color:var(--muted);
+      font-size:12px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+    }
+
+    a.link{
+      color:#40a4ff;
+      text-decoration:none;
+      font-weight:600;
+    }
   </style>
 </head>
+
 <body>
   <div class="card" role="main">
+
+    <!-- HEADER -->
     <div style="display:flex;align-items:center;gap:12px;">
-      <div style="width:46px;height:46px;border-radius:10px;background:linear-gradient(180deg,var(--accent),#34d399);display:flex;align-items:center;justify-content:center;color:#021314;font-weight:800;font-size:18px">RG</div>
+      <div class="headerIcon">RG</div>
       <div>
         <h1>So You Think You Can Be the Reply Guy</h1>
-        <p class="lead">Configure your quota, check progress, and let the Reply Guy do the rest. Warning mode: browser confirmation dialog.</p>
+        <p class="lead">Configure your quota, check progress, and let the Reply Guy do the rest.</p>
       </div>
     </div>
 
+    <!-- REQUIRED REPLIES -->
     <div class="row" style="margin-top:16px;">
       <label for="requiredReplies">Required replies before leaving</label>
       <input id="requiredReplies" type="number" min="1" step="1" value="3" />
-      <div class="small">Set how many replies you must make on X before you can leave.</div>
+      <div class="small">Set how many replies you must make before you can leave.</div>
     </div>
 
+    <!-- CURRENT COUNT -->
     <div class="row">
       <label>Current count</label>
       <div style="display:flex;align-items:center;gap:10px;">
         <div class="countBadge" id="currentCount">—</div>
-        <div class="small">Resets once per day (based on your local browser date).</div>
+        <div class="small">Resets once per day (local browser date).</div>
       </div>
     </div>
 
+    <!-- CONTROLS -->
     <div class="controls">
       <button id="saveBtn">Save</button>
       <button id="resetCount" class="ghost">Reset now</button>
@@ -62,14 +215,15 @@
     </div>
 
     <div class="note">
-      Detection is heuristic-based: the extension watches X's reply composer & post actions. If X updates its UI, you may need to update the extension. If counting still misses replies, open the page console (DevTools → Console) and look for <code>[ReplyGuy]</code> logs for debugging.
+      The extension watches X's reply composer & post actions. If X updates its UI, you may need to update the extension.
     </div>
 
     <footer>
-      <div><a class="link" href="#" id="helpLink">Help / Troubleshoot</a></div>
+      <a class="link" href="#" id="helpLink">Help / Troubleshoot</a>
+      <div></div>
     </footer>
-  </div>
 
+  </div>
   <script src="options.js"></script>
 </body>
 </html>

@@ -58,4 +58,9 @@ helpLink.addEventListener('click', (e) => {
   chrome.tabs.create({ url: 'https://support.google.com/chrome/answer/187443?hl=en' });
 });
 
+window.addEventListener('focus', load);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') load();
+});
+
 load();
