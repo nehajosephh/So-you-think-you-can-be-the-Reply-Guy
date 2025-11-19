@@ -1,66 +1,70 @@
-// options.js - powers the cleaner options UI for Reply Guy extension
-
 const requiredEl = document.getElementById('requiredReplies');
 const currentCountEl = document.getElementById('currentCount');
-const resetBtn = document.getElementById('resetCount');
+const badgeEl = document.getElementById('progressBadge');
 const saveBtn = document.getElementById('saveBtn');
-const statusEl = document.getElementById('status');
-const helpLink = document.getElementById('helpLink');
+const resetBtn = document.getElementById('resetBtn');
+const statusMsg = document.getElementById('statusMsg');
 
-function showStatus(text, transient = true) {
-  statusEl.innerText = text;
-  if (transient) {
-    setTimeout(() => { statusEl.innerText = 'Saved'; }, 1800);
+// Helper to show transient status
+function showMsg(text) {
+  statusMsg.innerText = text;
+  statusMsg.classList.add('visible');
+  setTimeout(() => statusMsg.classList.remove('visible'), 2000);
+}
+
+function updateUI(count, required) {
+  currentCountEl.innerText = count;
+  requiredEl.value = required;
+  
+  if (count >= required) {
+    badgeEl.innerText = "Quota Met 🔥";
+    badgeEl.style.color = "#9ece6a";
+    badgeEl.style.background = "rgba(158, 206, 106, 0.2)";
+  } else {
+    badgeEl.innerText = `${required - count} Left 💀`;
+    badgeEl.style.color = "#f7768e";
+    badgeEl.style.background = "rgba(247, 118, 142, 0.2)";
   }
 }
 
 async function load() {
-  const data = await chrome.storage.sync.get(['requiredReplies', 'count', 'lastResetDate']);
-  requiredEl.value = data.requiredReplies || 3;
-  currentCountEl.innerText = (data.count != null) ? String(data.count) : '0';
-  showStatus('Loaded', true);
+  const data = await chrome.storage.sync.get(['requiredReplies', 'count']);
+  updateUI(data.count || 0, data.requiredReplies || 3);
 }
 
 saveBtn.addEventListener('click', async () => {
-  let v = parseInt(requiredEl.value, 10);
-  if (!v || v < 1) v = 1;
-  await chrome.storage.sync.set({ requiredReplies: v });
-  showStatus('Saved', true);
+  let val = parseInt(requiredEl.value, 10);
+  if (!val || val < 1) val = 1;
+  await chrome.storage.sync.set({ requiredReplies: val });
+  
+  // Refresh UI to update badge calculation
+  const data = await chrome.storage.sync.get(['count']);
+  updateUI(data.count || 0, val);
+  
+  showMsg('Settings Saved');
+  chrome.runtime.sendMessage({ type: 'UPDATE_BADGE' });
 });
 
 resetBtn.addEventListener('click', async () => {
-  try {
-    // Reset count and update last reset date
-    const today = new Date().toISOString().slice(0, 10);
-    await chrome.storage.sync.set({ count: 0, lastResetDate: today });
-    
-    // Update UI
-    currentCountEl.innerText = '0';
-    showStatus('Reset', true);
-  } catch (err) {
-    showStatus('Reset failed', true);
-  }
+  // Reset count and update date
+  const date = new Date();
+  const offset = date.getTimezoneOffset() * 60000;
+  const today = (new Date(date - offset)).toISOString().slice(0, 10);
+  
+  await chrome.storage.sync.set({ count: 0, lastResetDate: today });
+  
+  const data = await chrome.storage.sync.get(['requiredReplies']);
+  updateUI(0, data.requiredReplies || 3);
+  
+  showMsg('Count Reset');
+  chrome.runtime.sendMessage({ type: 'UPDATE_BADGE' });
 });
 
-// Live update current count when storage changes
+// Listen for live updates (if content script increments while options open)
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'sync' && changes.count) {
-    currentCountEl.innerText = String(changes.count.newValue || 0);
-  }
-  if (area === 'sync' && changes.requiredReplies) {
-    requiredEl.value = changes.requiredReplies.newValue;
+  if (area === 'sync') {
+    load();
   }
 });
 
-helpLink.addEventListener('click', (e) => {
-  e.preventDefault();
-  // open a simple help popup / tutorial page — for now open a new tab to chrome extensions page for debug tips
-  chrome.tabs.create({ url: 'https://support.google.com/chrome/answer/187443?hl=en' });
-});
-
-window.addEventListener('focus', load);
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') load();
-});
-
-load();
+document.addEventListener('DOMContentLoaded', load);
