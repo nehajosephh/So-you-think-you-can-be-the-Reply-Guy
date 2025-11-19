@@ -1,6 +1,6 @@
 const DEFAULT_REQUIRED = 3;
 
-// --- HELPER FUNCTIONS ---
+// --- 1. DEFINE FUNCTIONS FIRST (Prevents Reference Errors) ---
 
 function isoDateToday() {
   const date = new Date();
@@ -11,30 +11,38 @@ function isoDateToday() {
 async function updateBadge() {
   try {
     const data = await chrome.storage.sync.get(["count", "requiredReplies"]);
-    const count = data.count || 0;
-    const required = data.requiredReplies || DEFAULT_REQUIRED;
+    // Safety check: ensure data exists
+    const count = (data && data.count) ? data.count : 0;
+    const required = (data && data.requiredReplies) ? data.requiredReplies : DEFAULT_REQUIRED;
     
-    chrome.action.setBadgeText({ text: String(count) });
+    await chrome.action.setBadgeText({ text: String(count) });
     
     if (count >= required) {
-      chrome.action.setBadgeBackgroundColor({ color: "#4CAF50" }); // Green
+      await chrome.action.setBadgeBackgroundColor({ color: "#4CAF50" }); // Green
     } else {
-      chrome.action.setBadgeBackgroundColor({ color: "#333333" }); // Dark
+      await chrome.action.setBadgeBackgroundColor({ color: "#333333" }); // Dark
     }
   } catch (e) {
-    console.error(e);
+    console.error("[ReplyGuy] Badge Update Error:", e);
   }
 }
 
 async function ensureDefaults() {
   try {
     const data = await chrome.storage.sync.get(["requiredReplies", "count", "lastResetDate"]);
-    if (!data.requiredReplies) await chrome.storage.sync.set({ requiredReplies: DEFAULT_REQUIRED });
-    if (data.count == null) await chrome.storage.sync.set({ count: 0 });
-    if (!data.lastResetDate) await chrome.storage.sync.set({ lastResetDate: isoDateToday() });
+    const updates = {};
+    let needsUpdate = false;
+
+    if (!data.requiredReplies) { updates.requiredReplies = DEFAULT_REQUIRED; needsUpdate = true; }
+    if (data.count === undefined) { updates.count = 0; needsUpdate = true; }
+    if (!data.lastResetDate) { updates.lastResetDate = isoDateToday(); needsUpdate = true; }
+
+    if (needsUpdate) {
+      await chrome.storage.sync.set(updates);
+    }
     updateBadge();
   } catch (e) {
-    console.error("Defaults error", e);
+    console.error("[ReplyGuy] Defaults Error:", e);
   }
 }
 
@@ -44,19 +52,19 @@ async function checkDailyReset() {
     const today = isoDateToday();
     
     if (!data.lastResetDate || data.lastResetDate !== today) {
-      console.log("[ReplyGuy] New day detected. Resetting count.");
+      console.log("[ReplyGuy] New day. Resetting count.");
       await chrome.storage.sync.set({ count: 0, lastResetDate: today });
       updateBadge();
     }
   } catch (e) {
-    console.error("Reset error", e);
+    console.error("[ReplyGuy] Reset Error:", e);
   }
 }
 
-// --- BULLYING LOGIC ---
+// --- 2. BULLYING LOGIC ---
 const ROASTS = [
-  "Leaving already? You haven't hit your quota.",
-  "Hey! Come back. The timeline needs your takes.",
+  "Leaving already? You haven't hit your quota. Pathetic.",
+  "Hey! Come back. The timeline needs your trash takes.",
   "Don't run away. Reply to someone.",
   "You thought you could leave? Ratio incoming.",
   "Zero replies? Are you even trying?",
@@ -65,23 +73,24 @@ const ROASTS = [
 
 async function bullyUser() {
   const data = await chrome.storage.sync.get(["count", "requiredReplies"]);
-  const count = data.count || 0;
-  const required = data.requiredReplies || DEFAULT_REQUIRED;
+  const count = (data && data.count) ? data.count : 0;
+  const required = (data && data.requiredReplies) ? data.requiredReplies : DEFAULT_REQUIRED;
 
   if (count < required) {
     const roast = ROASTS[Math.floor(Math.random() * ROASTS.length)];
     
     chrome.notifications.create({
       type: 'basic',
-      iconUrl: 'icon.png', 
+      iconUrl: 'icon.png', // MAKE SURE THIS FILE EXISTS
       title: 'Get Back To Work',
       message: `${roast} (${count}/${required})`,
-      priority: 2
+      priority: 2,
+      requireInteraction: true
     });
   }
 }
 
-// --- LISTENERS ---
+// --- 3. LISTENERS (Attached after functions are defined) ---
 
 chrome.runtime.onInstalled.addListener(() => {
   ensureDefaults();
@@ -105,7 +114,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       try {
         await checkDailyReset();
         const data = await chrome.storage.sync.get(["count"]);
-        const newCount = (data.count || 0) + 1;
+        const newCount = ((data && data.count) ? data.count : 0) + 1;
         await chrome.storage.sync.set({ count: newCount });
         updateBadge();
         sendResponse({ success: true, newCount });
@@ -113,7 +122,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         console.error(err);
       }
     })();
-    return true; // Async response
+    return true; // Keep channel open for async response
   }
   
   if (msg.type === 'USER_LEFT_TAB') {

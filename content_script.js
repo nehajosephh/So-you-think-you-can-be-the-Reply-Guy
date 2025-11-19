@@ -1,12 +1,7 @@
-// content_script.js
-// So You Think You Can Be The Reply Guy
-// Merged Logic: Robust Detection + Tab Switching Bullying
-
 (function () {
   const DEBUG = false;
-  const SITES = ["x.com", "twitter.com"];
-
-  // Global error handler
+  
+  // Global error handler to prevent context errors
   window.addEventListener('error', function(e) {
     if (e.message && e.message.includes('Extension context invalidated')) {
       e.preventDefault();
@@ -14,67 +9,17 @@
     }
   }, true);
 
-  function log(...args) { if (DEBUG) console.debug("[ReplyGuy]", ...args); }
+  function log(...args) { if (DEBUG) console.log("[ReplyGuy]", ...args); }
 
-  // --- 1. BULLYING FEATURE (New) ---
+  // --- 1. STATE & SELECTORS ---
   let originalTitle = document.title;
+  let openerTokenCounter = 1;
 
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === 'hidden') {
-      checkQuotaAndBully();
-    } else {
-      // User came back
-      if (originalTitle && !document.title.includes("Reply")) {
-        document.title = originalTitle;
-      }
-    }
-  });
-
-  async function checkQuotaAndBully() {
-    try {
-      const data = await chrome.storage.sync.get(['count', 'requiredReplies']);
-      const count = data.count || 0;
-      const required = data.requiredReplies || 3;
-
-      if (count < required) {
-        // Notify Service Worker to show notification
-        chrome.runtime.sendMessage({ type: 'USER_LEFT_TAB' });
-        
-        // Passive Aggressive Title Change
-        originalTitle = document.title;
-        document.title = `(${required - count} LEFT) DON'T LEAVE!`;
-      }
-    } catch (e) {
-      // Ignore context invalidation
-    }
-  }
-
-  // --- 2. INCREMENT LOGIC (Updated) ---
-  function sendIncrement() {
-    try {
-      chrome.runtime.sendMessage({ type: 'increment' }, (res) => {
-        log("Reply counted via service worker.", res);
-        // If we were bullying, reset title slightly
-        if (document.title.includes("DON'T LEAVE")) {
-          document.title = "X"; 
-        }
-      });
-    } catch (err) {
-      log("Increment error:", err);
-    }
-  }
-
-  // --- 3. DETECTION LOGIC (Original Option C Restored) ---
-  
   const REPLY_OPENER_SELECTORS = [
     '[data-testid="reply"]',
     '[data-testid="replyButton"]',
     'div[aria-label*="Reply"]',
-    'div[role="button"][data-testid*="reply"]',
-    'button[aria-label*="Reply"]',
-    'button[aria-label*="reply"]',
-    'div[aria-label*="reply"]',
-    'svg[aria-label*="Reply"]'
+    'button[aria-label*="Reply"]'
   ];
 
   const SUBMIT_BUTTON_SELECTORS = [
@@ -82,60 +27,77 @@
     'button[data-testid="tweetButtonInline"]',
     '[data-testid="tweetButton"]',
     '[data-testid="tweetButtonInline"]',
-    'div[role="button"][data-testid*="tweet"]',
-    'div[role="button"][aria-label*="Tweet"]',
     'div[role="button"][aria-label*="Post"]',
-    'button[aria-label*="Post"]',
-    'button[aria-label*="Tweet"]',
-    'div[aria-label*="Post"]'
+    'button[aria-label*="Post"]'
   ];
 
-  let openerTokenCounter = 1;
+  // --- 2. MESSAGING HELPER ---
+  function sendIncrement() {
+    if (chrome.runtime?.id) {
+      chrome.runtime.sendMessage({ type: 'increment' }, (res) => {
+        log("Increment sent", res);
+        // Reset title if we were bullying
+        if (document.title.includes("DON'T LEAVE")) document.title = "X";
+      });
+    }
+  }
+
+  // --- 3. BULLYING: TAB SWITCHING ---
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === 'hidden') {
+      checkQuotaAndBully();
+    } else {
+      if (originalTitle && !document.title.includes("Reply")) {
+        document.title = originalTitle;
+      }
+    }
+  });
+
+  // --- 4. BULLYING: PREVENT CLOSING TAB ---
+  window.addEventListener('beforeunload', (e) => {
+    // We can't check storage synchronously reliably here, so we assume
+    // if the title is currently "DON'T LEAVE", we should block.
+    // OR we rely on the user "feeling" the block.
+    // Standard chrome behavior requires setting returnValue.
+    e.preventDefault();
+    e.returnValue = "You haven't hit your reply quota yet. Are you sure?";
+  });
+
+  async function checkQuotaAndBully() {
+    try {
+      if (!chrome.runtime?.id) return;
+      const data = await chrome.storage.sync.get(['count', 'requiredReplies']);
+      const count = data.count || 0;
+      const required = data.requiredReplies || 3;
+
+      if (count < required) {
+        // 1. Notify Background (Pop-up notification)
+        chrome.runtime.sendMessage({ type: 'USER_LEFT_TAB' });
+
+        // 2. Change Title
+        originalTitle = document.title;
+        document.title = `(${required - count} LEFT) DON'T LEAVE!`;
+      }
+    } catch (e) {}
+  }
+
+  // --- 5. DETECTION LOGIC (The "Eyes") ---
 
   function composerLooksLikeReply(composer) {
     if (!composer) return false;
     const text = (composer.innerText || "").trim();
-
-    // 1) Textual cue
-    if (text.match(/replying\s+to|in\s+reply\s+to/i)) return true;
-
-    // 2) DOM context
-    try {
-      const replyText = composer.querySelector('[aria-label*="Replying"], [aria-label*="Reply to"]');
-      if (replyText) return true;
-      const quotedTweet = composer.querySelector('[data-testid="reply"], [data-testid*="quote"]');
-      if (quotedTweet) return true;
-    } catch (e) {}
-
-    // 3) Explicit marker
+    
+    // Textual cues
+    if (text.match(/replying\s+to/i)) return true;
+    
+    // DOM cues
+    if (composer.querySelector('[aria-label*="Replying"]')) return true;
+    
+    // Context markers
     if (composer.__replyGuyMarked === true) return true;
-    if (composer.__replyGuyMarkedToken) return true;
-
-    // 4) URL Context
-    const currentUrl = location.href || "";
-    if (currentUrl.includes('/status/') || currentUrl.includes('/i/web/status/')) return true;
-
-    // 5) Article nearby
-    try {
-      if (composer.querySelector && composer.querySelector('article')) return true;
-    } catch (e) {}
+    if (location.href.includes('/status/')) return true;
 
     return false;
-  }
-
-  function findComposerContainer(node) {
-    if (!node) return null;
-    let el = node;
-    for (let i = 0; i < 10 && el; i++) {
-      if (el.querySelector && (el.querySelector('[contenteditable="true"]') || el.querySelector('textarea'))) {
-        return el;
-      }
-      if (el.getAttribute && (el.getAttribute('contenteditable') === 'true' || el.tagName === 'TEXTAREA')) {
-        return el.closest('div[role="dialog"], div[aria-label*="Reply"], div[data-testid*="tweet"], div[role="application"]') || el.parentElement;
-      }
-      el = el.parentElement;
-    }
-    return document.querySelector('div[role="dialog"], div[aria-label*="Reply"], div[data-testid*="reply"], div[data-testid*="tweet"]');
   }
 
   function attachSubmitListenersToComposer(composer) {
@@ -143,143 +105,97 @@
     composer.__replyGuySubmitAttached = true;
 
     // Button Clicks
-    for (const sel of SUBMIT_BUTTON_SELECTORS) {
-      try {
-        const btns = composer.querySelectorAll(sel);
-        btns.forEach(btn => {
-          if (btn.__replyGuyBtnAttached) return;
-          btn.__replyGuyBtnAttached = true;
-
-          const handler = (ev) => {
-            const isReply = composerLooksLikeReply(composer);
-            if (isReply) {
-              setTimeout(sendIncrement, 350);
-            }
-          };
-          btn.addEventListener('click', handler, true);
-        });
-      } catch (e) {}
-    }
-
-    // Keyboard Submit (Ctrl+Enter)
-    try {
-      const editables = composer.querySelectorAll('[contenteditable="true"], textarea');
-      editables.forEach(editable => {
-        if (editable.__replyGuyKeyAttached) return;
-        const keyHandler = (e) => {
-          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-            const isReply = composerLooksLikeReply(composer);
-            if (isReply) {
-              setTimeout(sendIncrement, 350);
-            }
+    SUBMIT_BUTTON_SELECTORS.forEach(sel => {
+      const btns = composer.querySelectorAll(sel);
+      btns.forEach(btn => {
+        if (btn.__replyGuyBtnAttached) return;
+        btn.__replyGuyBtnAttached = true;
+        
+        btn.addEventListener('click', () => {
+          if (composerLooksLikeReply(composer)) {
+            // Delay to allow X to process the tweet
+            setTimeout(sendIncrement, 500);
           }
-        };
-        editable.addEventListener('keydown', keyHandler, true);
-        editable.__replyGuyKeyAttached = true;
+        }, true); // Capture phase
       });
-    } catch (e) {}
+    });
+
+    // Cmd+Enter / Ctrl+Enter
+    const editables = composer.querySelectorAll('[contenteditable="true"]');
+    editables.forEach(ed => {
+      if(ed.__replyGuyKeyAttached) return;
+      ed.__replyGuyKeyAttached = true;
+      ed.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+          if (composerLooksLikeReply(composer)) {
+            setTimeout(sendIncrement, 500);
+          }
+        }
+      }, true);
+    });
+  }
+
+  function scanForNewComposersAndMark(token) {
+    // Find potential composers (modal or inline)
+    const candidates = document.querySelectorAll('div[role="dialog"], div[aria-label*="Reply"], div[data-testid="tweetTextarea_0"]');
+    candidates.forEach(cand => {
+      // Find the actual container
+      const composer = cand.closest('div[role="dialog"]') || cand.closest('div[class*="r-"]') || cand;
+      
+      if (composer && !composer.__replyGuyMarked) {
+        // Check if it contains an editable field
+        if (composer.querySelector('[contenteditable="true"]')) {
+          composer.__replyGuyMarked = true;
+          composer.__replyGuyMarkedToken = token;
+          attachSubmitListenersToComposer(composer);
+        }
+      }
+    });
   }
 
   function replyOpenerClickHandler(e) {
     const opener = e.target.closest && e.target.closest(REPLY_OPENER_SELECTORS.join(','));
     if (!opener) return;
 
-    const token = `replyGuyToken:${Date.now()}:${openerTokenCounter++}`;
-    opener.__replyGuyToken = token;
+    const token = `token:${Date.now()}:${openerTokenCounter++}`;
     window.__replyGuyLastOpenerToken = token;
 
-    setTimeout(() => {
-      const composer = findComposerContainer(opener);
-      if (composer) {
-        composer.__replyGuyMarked = true;
-        composer.__replyGuyMarkedToken = token;
-        attachSubmitListenersToComposer(composer);
-      } else {
-        scanForNewComposersAndMark(token);
-      }
-    }, 220);
+    // Scan shortly after click
+    setTimeout(() => scanForNewComposersAndMark(token), 250);
+    setTimeout(() => scanForNewComposersAndMark(token), 800);
   }
 
-  function scanForNewComposersAndMark(token) {
-    const candidates = Array.from(document.querySelectorAll('div[role="dialog"], div[aria-label*="Reply"], div[data-testid*="tweet"], div[data-testid*="reply"]'));
-    for (const cand of candidates) {
-      if (cand.__replyGuyMarked) continue;
-      if (cand.querySelector && (cand.querySelector('[contenteditable="true"]') || cand.querySelector('textarea'))) {
-        cand.__replyGuyMarked = true;
-        cand.__replyGuyMarkedToken = token;
-        attachSubmitListenersToComposer(cand);
-        return;
-      }
-    }
-  }
-
-  function startComposerObserver() {
+  // --- 6. OBSERVER (Watches for new tweets/modals) ---
+  function startObserver() {
     const mo = new MutationObserver((mutations) => {
-      let sawComposer = false;
       for (const m of mutations) {
         for (const node of m.addedNodes) {
-          if (!(node instanceof HTMLElement)) continue;
-          if (node.querySelector && (node.querySelector('[contenteditable="true"]') || node.querySelector('textarea') || node.querySelector('[data-testid="tweetButton"]') || node.querySelector('[data-testid="tweetButtonInline"]'))) {
-            const composer = findComposerContainer(node) || node;
-            if (composer && !composer.__replyGuySubmitAttached) {
-              if (composerLooksLikeReply(composer) || (window.__replyGuyLastOpenerToken && !composer.__replyGuyMarked)) {
+          if (node.nodeType === 1) {
+            // Check if a submit button or text area was added
+            if (node.querySelector('[data-testid="tweetButton"]') || node.querySelector('[contenteditable="true"]')) {
+              const composer = node.closest('div[role="dialog"]') || node;
+              
+              // If we clicked a reply button recently, mark this new composer
+              if (window.__replyGuyLastOpenerToken && composer && !composer.__replyGuyMarked) {
                 composer.__replyGuyMarked = true;
-                composer.__replyGuyMarkedToken = window.__replyGuyLastOpenerToken || null;
+                composer.__replyGuyMarkedToken = window.__replyGuyLastOpenerToken;
               }
               attachSubmitListenersToComposer(composer);
             }
-            sawComposer = true;
           }
         }
       }
-      if (sawComposer) {
-        setTimeout(() => { window.__replyGuyLastOpenerToken = null; }, 1200);
-      }
     });
-
-    mo.observe(document.documentElement || document.body, { childList: true, subtree: true });
+    mo.observe(document.body, { childList: true, subtree: true });
   }
 
-  function attachGlobalListeners() {
-    document.addEventListener('click', replyOpenerClickHandler, true);
-
-    // Catch-all click listener for submit buttons
-    document.addEventListener('click', (e) => {
-      const btn = e.target.closest && e.target.closest(SUBMIT_BUTTON_SELECTORS.join(','));
-      if (!btn) return;
-      const composer = findComposerContainer(btn) || findComposerContainer(document.activeElement) || null;
-      if (!composer) return;
-      if (!composer.__replyGuySubmitAttached) {
-        if (composerLooksLikeReply(composer)) {
-          composer.__replyGuyMarked = true;
-        }
-        attachSubmitListenersToComposer(composer);
-      }
-    }, true);
-
-    // SPA hooks
-    const _push = history.pushState;
-    history.pushState = function () {
-      const res = _push.apply(this, arguments);
-      setTimeout(() => { try { scanForNewComposersAndMark(window.__replyGuyLastOpenerToken || null); } catch (e) {} }, 400);
-      return res;
-    };
-    const _replace = history.replaceState;
-    history.replaceState = function () {
-      const res = _replace.apply(this, arguments);
-      setTimeout(() => { try { scanForNewComposersAndMark(window.__replyGuyLastOpenerToken || null); } catch (e) {} }, 400);
-      return res;
-    };
-    window.addEventListener('popstate', () => setTimeout(() => scanForNewComposersAndMark(null), 300));
-  }
-
-  // --- 4. INIT ---
+  // --- 7. INIT ---
   try {
-    attachGlobalListeners();
-    startComposerObserver();
-    log("ReplyGuy content script loaded (v3.2: Detection + Bullying)");
-  } catch (err) {
-    console.error("[ReplyGuy] init error:", err);
-  }
+    document.addEventListener('click', replyOpenerClickHandler, true);
+    startObserver();
+    // Initial scan
+    setTimeout(() => scanForNewComposersAndMark(null), 1000);
+    log("Reply Guy v3.3 Active");
+  } catch (e) {}
 
 })();

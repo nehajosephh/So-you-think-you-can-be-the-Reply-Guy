@@ -10,206 +10,115 @@
       --text-main: #ececec;
       --text-muted: #8d8d8d;
       --accent: #2eaadc;
-      --accent-dim: rgba(46, 170, 220, 0.15);
       --danger: #ff5f57;
-      --danger-dim: rgba(255, 95, 87, 0.15);
       --success: #4caf50;
-      --success-dim: rgba(76, 175, 80, 0.15);
     }
 
     body {
-      /* FIXED DIMENSIONS FOR POPUP */
-      width: 380px;
-      height: auto;
-      min-height: 450px;
+      width: 380px; /* FIXED WIDTH */
       margin: 0;
       padding: 20px;
       box-sizing: border-box;
-
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background: linear-gradient(135deg, #1e1e1e 0%, #121212 100%);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #121212;
       color: var(--text-main);
     }
 
-    /* Glass Container */
-    .container {
-      display: flex;
-      flex-direction: column;
-      gap: 24px;
-    }
-
-    /* Header */
     header {
       display: flex;
       align-items: center;
       gap: 12px;
-      padding-bottom: 16px;
+      margin-bottom: 20px;
       border-bottom: 1px solid rgba(255,255,255,0.1);
+      padding-bottom: 15px;
     }
 
-    .icon {
-      font-size: 24px;
-      background: var(--bg-card);
-      width: 40px;
-      height: 40px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-    }
+    .icon { font-size: 24px; }
 
-    h1 {
-      font-size: 16px;
-      font-weight: 600;
-      margin: 0;
-      line-height: 1.2;
-    }
+    h1 { font-size: 16px; margin: 0; }
+    p.subtitle { font-size: 12px; color: var(--text-muted); margin: 2px 0 0 0; }
 
-    p.subtitle {
-      font-size: 12px;
-      color: var(--text-muted);
-      margin: 4px 0 0 0;
-    }
-
-    /* Metric Cards */
-    .metric-row {
+    .row {
       display: flex;
       justify-content: space-between;
       align-items: center;
       background: var(--bg-card);
-      padding: 12px 16px;
-      border-radius: 10px;
-      border: 1px solid rgba(255,255,255,0.05);
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 10px;
     }
 
-    label {
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--text-muted);
-    }
-
-    /* Input */
     input[type="number"] {
       background: rgba(0,0,0,0.3);
       border: 1px solid rgba(255,255,255,0.1);
       color: #fff;
-      border-radius: 6px;
-      padding: 6px 10px;
+      border-radius: 4px;
+      padding: 5px;
       width: 50px;
       text-align: center;
-      font-family: inherit;
-      font-size: 14px;
-      outline: none;
-      transition: border-color 0.2s;
-    }
-    
-    input:focus {
-      border-color: var(--accent);
     }
 
-    /* Badges */
     .badge {
-      font-size: 12px;
-      font-weight: 600;
       padding: 4px 8px;
       border-radius: 4px;
-      background: var(--bg-card);
-      color: var(--text-muted);
-    }
-
-    .badge.success {
-      background: var(--success-dim);
-      color: var(--success);
-    }
-
-    .badge.fail {
-      background: var(--danger-dim);
+      font-size: 12px;
+      font-weight: bold;
+      background: rgba(255, 95, 87, 0.15);
       color: var(--danger);
     }
-
-    .count-display {
-      font-size: 18px;
-      font-weight: 700;
-      font-family: monospace;
-    }
-
-    /* Buttons */
-    .actions {
-      display: flex;
-      gap: 10px;
-      margin-top: 8px;
-    }
+    .badge.success { background: rgba(76, 175, 80, 0.15); color: var(--success); }
 
     button {
-      flex: 1;
-      border: none;
+      width: 100%;
       padding: 10px;
       border-radius: 8px;
-      font-size: 13px;
+      border: none;
       font-weight: 600;
       cursor: pointer;
-      transition: all 0.2s;
+      margin-top: 5px;
     }
 
-    #saveBtn {
-      background: var(--accent);
-      color: #fff;
-      box-shadow: 0 2px 8px rgba(46, 170, 220, 0.3);
-    }
-    #saveBtn:hover { opacity: 0.9; transform: translateY(-1px); }
-    #saveBtn:active { transform: scale(0.98); }
+    #saveBtn { background: var(--accent); color: #fff; margin-bottom: 8px; }
+    #resetBtn { background: rgba(255,255,255,0.08); color: var(--text-muted); }
 
-    #resetBtn {
-      background: rgba(255,255,255,0.08);
-      color: var(--text-muted);
-    }
-    #resetBtn:hover { background: rgba(255,255,255,0.12); color: #fff; }
-
-    /* Status Toast */
     #statusMsg {
       text-align: center;
       font-size: 12px;
-      margin-top: 8px;
+      margin-top: 10px;
       color: var(--success);
       opacity: 0;
       transition: opacity 0.3s;
     }
     #statusMsg.visible { opacity: 1; }
-    
   </style>
 </head>
 <body>
-
-  <div class="container">
-    <header>
-      <div class="icon">👺</div>
-      <div>
-        <h1>Reply Guy Control</h1>
-        <p class="subtitle">Quota management system.</p>
-      </div>
-    </header>
-
-    <div class="metric-row">
-      <label for="requiredReplies">Daily Quota</label>
-      <input type="number" id="requiredReplies" min="1" value="3" />
+  <header>
+    <div class="icon">👺</div>
+    <div>
+      <h1>Reply Guy Control</h1>
+      <p class="subtitle">Quota management</p>
     </div>
+  </header>
 
-    <div class="metric-row">
-      <div style="display:flex; flex-direction:column; gap:4px;">
-        <label>Today's Replies</label>
-        <div class="count-display" id="currentCount">0</div>
-      </div>
-      <div class="badge fail" id="progressBadge">Pending</div>
-    </div>
-
-    <div class="actions">
-      <button id="saveBtn">Save Changes</button>
-      <button id="resetBtn">Reset Count</button>
-    </div>
-
-    <div id="statusMsg">Saved successfully</div>
+  <div class="row">
+    <span>Daily Quota</span>
+    <input type="number" id="requiredReplies" min="1" value="3" />
   </div>
+
+  <div class="row">
+    <span>Today's Count</span>
+    <span style="font-family: monospace; font-size: 16px;" id="currentCount">0</span>
+  </div>
+
+  <div class="row">
+    <span>Status</span>
+    <div id="progressBadge" class="badge">Pending</div>
+  </div>
+
+  <button id="saveBtn">Save Changes</button>
+  <button id="resetBtn">Reset Count</button>
+  <div id="statusMsg">Saved</div>
 
   <script src="options.js"></script>
 </body>
