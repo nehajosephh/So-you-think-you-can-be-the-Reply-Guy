@@ -77,17 +77,36 @@ async function bullyUser() {
   if (count < required) {
     const roast = ROASTS[Math.floor(Math.random() * ROASTS.length)];
 
-    // TRY/CATCH prevents crash if icon.png is missing
+    // Send message to active tab to show popup
     try {
-      chrome.notifications.create({
-        type: 'basic',
-        iconUrl: 'icon.png', // MUST EXIST
-        title: 'Get Back To Work',
-        message: `${roast} (${count}/${required})`,
-        priority: 2
-      });
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tabs[0]) {
+        // Don't show popup if user is on X/Twitter
+        const url = tabs[0].url || '';
+        if (!url.includes('x.com') && !url.includes('twitter.com')) {
+          chrome.tabs.sendMessage(tabs[0].id, {
+            type: 'SHOW_ROAST_POPUP',
+            roast: roast,
+            count: count,
+            required: required
+          });
+        }
+      }
     } catch (e) {
-      console.log("Notification failed. Missing icon.png?", e);
+      console.log("Failed to send popup message:", e);
+
+      // Fallback to notification
+      try {
+        chrome.notifications.create({
+          type: 'basic',
+          iconUrl: 'icon.png',
+          title: 'Get Back To Work',
+          message: `${roast} (${count}/${required})`,
+          priority: 2
+        });
+      } catch (notifError) {
+        console.log("Notification also failed:", notifError);
+      }
     }
   }
 }

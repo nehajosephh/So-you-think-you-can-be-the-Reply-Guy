@@ -11,7 +11,8 @@
   ],
   "host_permissions": [
     "*://*.x.com/*",
-    "*://*.twitter.com/*"
+    "*://*.twitter.com/*",
+    "*://*/*"
   ],
   "icons": {
     "16": "icon.png",
@@ -38,6 +39,15 @@
       ],
       "js": [
         "content_script.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "*://*/*"
+      ],
+      "js": [
+        "roast_popup.js"
       ],
       "run_at": "document_idle"
     }
