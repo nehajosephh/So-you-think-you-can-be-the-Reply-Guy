@@ -17,11 +17,11 @@ function updateUI(count, required) {
   requiredEl.value = required;
   
   if (count >= required) {
-    badgeEl.innerText = "Quota Met 🔥";
+    badgeEl.innerText = "Quota Met";
     badgeEl.style.color = "#9ece6a";
     badgeEl.style.background = "rgba(158, 206, 106, 0.2)";
   } else {
-    badgeEl.innerText = `${required - count} Left 💀`;
+    badgeEl.innerText = `${required - count} Left`;
     badgeEl.style.color = "#f7768e";
     badgeEl.style.background = "rgba(247, 118, 142, 0.2)";
   }

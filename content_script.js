@@ -1,201 +1,99 @@
 (function () {
-  const DEBUG = false;
-  
-  // Global error handler to prevent context errors
-  window.addEventListener('error', function(e) {
-    if (e.message && e.message.includes('Extension context invalidated')) {
-      e.preventDefault();
-      return true;
-    }
-  }, true);
+  const DEBUG = true; 
 
-  function log(...args) { if (DEBUG) console.log("[ReplyGuy]", ...args); }
-
-  // --- 1. STATE & SELECTORS ---
-  let originalTitle = document.title;
-  let openerTokenCounter = 1;
-
-  const REPLY_OPENER_SELECTORS = [
-    '[data-testid="reply"]',
-    '[data-testid="replyButton"]',
-    'div[aria-label*="Reply"]',
-    'button[aria-label*="Reply"]'
-  ];
-
-  const SUBMIT_BUTTON_SELECTORS = [
-    'button[data-testid="tweetButton"]',
-    'button[data-testid="tweetButtonInline"]',
-    '[data-testid="tweetButton"]',
-    '[data-testid="tweetButtonInline"]',
-    'div[role="button"][aria-label*="Post"]',
-    'button[aria-label*="Post"]'
-  ];
-
-  // --- 2. MESSAGING HELPER ---
+  // --- 1. HELPER: Send Count to Background ---
   function sendIncrement() {
     if (chrome.runtime?.id) {
       chrome.runtime.sendMessage({ type: 'increment' }, (res) => {
-        log("Increment sent", res);
-        // Reset title if we were bullying
+        if (DEBUG) console.log("[ReplyGuy] Increment sent. New count:", res?.newCount);
+        // Restore title if we were bullying
         if (document.title.includes("DON'T LEAVE")) document.title = "X";
       });
     }
   }
 
-  // --- 3. BULLYING: TAB SWITCHING ---
+  // --- 2. BULLYING: Tab Switch & Close ---
+  
+  // A. Switch Tabs (Notification + Title Change)
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === 'hidden') {
-      checkQuotaAndBully();
+      checkQuota((count, required) => {
+        if (count < required) {
+          // Send trigger for System Notification
+          chrome.runtime.sendMessage({ type: 'USER_LEFT_TAB' });
+          // Change Title
+          document.title = `(${required - count} LEFT) DON'T LEAVE!`;
+        }
+      });
     } else {
-      if (originalTitle && !document.title.includes("Reply")) {
-        document.title = originalTitle;
-      }
+      // Restore title when coming back
+      if (document.title.includes("DON'T LEAVE")) document.title = "X";
     }
   });
 
-  // --- 4. BULLYING: PREVENT CLOSING TAB ---
+  // B. Close Tab (Browser Popup)
   window.addEventListener('beforeunload', (e) => {
-    // We can't check storage synchronously reliably here, so we assume
-    // if the title is currently "DON'T LEAVE", we should block.
-    // OR we rely on the user "feeling" the block.
-    // Standard chrome behavior requires setting returnValue.
-    e.preventDefault();
-    e.returnValue = "You haven't hit your reply quota yet. Are you sure?";
+    // We cannot use async storage here, so we rely on a flag set periodically
+    if (window.__replyGuyQuotaMet === false) {
+      e.preventDefault();
+      e.returnValue = "You haven't finished your replies. Are you sure?";
+      return e.returnValue;
+    }
   });
 
-  async function checkQuotaAndBully() {
-    try {
-      if (!chrome.runtime?.id) return;
-      const data = await chrome.storage.sync.get(['count', 'requiredReplies']);
-      const count = data.count || 0;
-      const required = data.requiredReplies || 3;
-
-      if (count < required) {
-        // 1. Notify Background (Pop-up notification)
-        chrome.runtime.sendMessage({ type: 'USER_LEFT_TAB' });
-
-        // 2. Change Title
-        originalTitle = document.title;
-        document.title = `(${required - count} LEFT) DON'T LEAVE!`;
-      }
-    } catch (e) {}
-  }
-
-  // --- 5. DETECTION LOGIC (The "Eyes") ---
-
-  function composerLooksLikeReply(composer) {
-    if (!composer) return false;
-    const text = (composer.innerText || "").trim();
-    
-    // Textual cues
-    if (text.match(/replying\s+to/i)) return true;
-    
-    // DOM cues
-    if (composer.querySelector('[aria-label*="Replying"]')) return true;
-    
-    // Context markers
-    if (composer.__replyGuyMarked === true) return true;
-    if (location.href.includes('/status/')) return true;
-
-    return false;
-  }
-
-  function attachSubmitListenersToComposer(composer) {
-    if (!composer || composer.__replyGuySubmitAttached) return;
-    composer.__replyGuySubmitAttached = true;
-
-    // Button Clicks
-    SUBMIT_BUTTON_SELECTORS.forEach(sel => {
-      const btns = composer.querySelectorAll(sel);
-      btns.forEach(btn => {
-        if (btn.__replyGuyBtnAttached) return;
-        btn.__replyGuyBtnAttached = true;
-        
-        btn.addEventListener('click', () => {
-          if (composerLooksLikeReply(composer)) {
-            // Delay to allow X to process the tweet
-            setTimeout(sendIncrement, 500);
-          }
-        }, true); // Capture phase
+  // Helper to check quota
+  function checkQuota(callback) {
+    if (chrome.runtime?.id) {
+      chrome.storage.sync.get(['count', 'requiredReplies'], (data) => {
+        const count = data.count || 0;
+        const required = data.requiredReplies || 3;
+        // Update global flag for beforeunload
+        window.__replyGuyQuotaMet = (count >= required);
+        callback(count, required);
       });
-    });
+    }
+  }
 
-    // Cmd+Enter / Ctrl+Enter
-    const editables = composer.querySelectorAll('[contenteditable="true"]');
-    editables.forEach(ed => {
-      if(ed.__replyGuyKeyAttached) return;
-      ed.__replyGuyKeyAttached = true;
-      ed.addEventListener('keydown', (e) => {
-        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-          if (composerLooksLikeReply(composer)) {
-            setTimeout(sendIncrement, 500);
-          }
+  // Check quota every 5 seconds to keep the 'beforeunload' flag fresh
+  setInterval(() => checkQuota(() => {}), 5000);
+
+
+  // --- 3. COUNTING LOGIC (The "Perfect" Logic) ---
+  // Instead of complex heuristics, we look for the "Reply" text on the button clicked.
+
+  document.addEventListener('click', (e) => {
+    // Find the closest button
+    const btn = e.target.closest('button') || e.target.closest('[role="button"]');
+    
+    if (btn) {
+      const txt = btn.innerText || "";
+      const label = btn.getAttribute('aria-label') || "";
+      const testId = btn.getAttribute('data-testid') || "";
+
+      // CHECK 1: Is it a Tweet Submit Button?
+      if (testId === 'tweetButton' || testId === 'tweetButtonInline') {
+        // CHECK 2: Is it a Reply?
+        // X usually labels the submit button "Reply" when replying, and "Post" when posting.
+        if (txt === 'Reply' || label === 'Reply' || txt === 'Reply all') {
+          console.log("[ReplyGuy] Reply button clicked!");
+          setTimeout(sendIncrement, 500); // Wait for network
         }
-      }, true);
-    });
-  }
-
-  function scanForNewComposersAndMark(token) {
-    // Find potential composers (modal or inline)
-    const candidates = document.querySelectorAll('div[role="dialog"], div[aria-label*="Reply"], div[data-testid="tweetTextarea_0"]');
-    candidates.forEach(cand => {
-      // Find the actual container
-      const composer = cand.closest('div[role="dialog"]') || cand.closest('div[class*="r-"]') || cand;
-      
-      if (composer && !composer.__replyGuyMarked) {
-        // Check if it contains an editable field
-        if (composer.querySelector('[contenteditable="true"]')) {
-          composer.__replyGuyMarked = true;
-          composer.__replyGuyMarkedToken = token;
-          attachSubmitListenersToComposer(composer);
-        }
-      }
-    });
-  }
-
-  function replyOpenerClickHandler(e) {
-    const opener = e.target.closest && e.target.closest(REPLY_OPENER_SELECTORS.join(','));
-    if (!opener) return;
-
-    const token = `token:${Date.now()}:${openerTokenCounter++}`;
-    window.__replyGuyLastOpenerToken = token;
-
-    // Scan shortly after click
-    setTimeout(() => scanForNewComposersAndMark(token), 250);
-    setTimeout(() => scanForNewComposersAndMark(token), 800);
-  }
-
-  // --- 6. OBSERVER (Watches for new tweets/modals) ---
-  function startObserver() {
-    const mo = new MutationObserver((mutations) => {
-      for (const m of mutations) {
-        for (const node of m.addedNodes) {
-          if (node.nodeType === 1) {
-            // Check if a submit button or text area was added
-            if (node.querySelector('[data-testid="tweetButton"]') || node.querySelector('[contenteditable="true"]')) {
-              const composer = node.closest('div[role="dialog"]') || node;
-              
-              // If we clicked a reply button recently, mark this new composer
-              if (window.__replyGuyLastOpenerToken && composer && !composer.__replyGuyMarked) {
-                composer.__replyGuyMarked = true;
-                composer.__replyGuyMarkedToken = window.__replyGuyLastOpenerToken;
-              }
-              attachSubmitListenersToComposer(composer);
+        // Fallback: Check if we are in a Reply Modal
+        else {
+            const modal = btn.closest('[role="dialog"]');
+            if (modal) {
+                // Check if modal title says "Reply"
+                const heading = modal.querySelector('h2');
+                if (heading && heading.innerText.includes('Reply')) {
+                    console.log("[ReplyGuy] Reply Modal button clicked!");
+                    setTimeout(sendIncrement, 500);
+                }
             }
-          }
         }
       }
-    });
-    mo.observe(document.body, { childList: true, subtree: true });
-  }
+    }
+  }, true); // Capture phase to catch it before X handles it
 
-  // --- 7. INIT ---
-  try {
-    document.addEventListener('click', replyOpenerClickHandler, true);
-    startObserver();
-    // Initial scan
-    setTimeout(() => scanForNewComposersAndMark(null), 1000);
-    log("Reply Guy v3.3 Active");
-  } catch (e) {}
+  console.log("[ReplyGuy] Loaded. Waiting for 'Reply' clicks...");
 
 })();
