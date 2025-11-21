@@ -1,26 +1,26 @@
 (function () {
-    let popupShown = false;
+  let popupShown = false;
 
-    // Listen for messages from service worker
-    chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-        if (msg.type === 'SHOW_ROAST_POPUP') {
-            if (!popupShown) {
-                showRoastPopup(msg.roast, msg.count, msg.required);
-                popupShown = true;
-            }
-        }
-    });
+  // Listen for messages from service worker
+  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    if (msg.type === 'SHOW_ROAST_POPUP') {
+      if (!popupShown) {
+        showRoastPopup(msg.roast, msg.count, msg.required);
+        popupShown = true;
+      }
+    }
+  });
 
-    function showRoastPopup(roast, count, required) {
-        // Don't show on X/Twitter pages
-        if (window.location.hostname.includes('x.com') || window.location.hostname.includes('twitter.com')) {
-            return;
-        }
+  function showRoastPopup(roast, count, required) {
+    // Don't show on X/Twitter pages
+    if (window.location.hostname.includes('x.com') || window.location.hostname.includes('twitter.com')) {
+      return;
+    }
 
-        // Create backdrop
-        const backdrop = document.createElement('div');
-        backdrop.id = 'reply-guy-roast-backdrop';
-        backdrop.style.cssText = `
+    // Create backdrop
+    const backdrop = document.createElement('div');
+    backdrop.id = 'reply-guy-roast-backdrop';
+    backdrop.style.cssText = `
       position: fixed;
       top: 0;
       left: 0;
@@ -35,10 +35,10 @@
       animation: fadeIn 0.3s ease-out;
     `;
 
-        // Create popup container
-        const popup = document.createElement('div');
-        popup.id = 'reply-guy-roast-popup';
-        popup.style.cssText = `
+    // Create popup container
+    const popup = document.createElement('div');
+    popup.id = 'reply-guy-roast-popup';
+    popup.style.cssText = `
       background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
       border: 2px solid #ff5f57;
       border-radius: 16px;
@@ -50,10 +50,10 @@
       animation: popIn 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
     `;
 
-        // Create content
-        const title = document.createElement('h1');
-        title.textContent = '🚨 GET BACK TO WORK 🚨';
-        title.style.cssText = `
+    // Create content
+    const title = document.createElement('h1');
+    title.textContent = 'GET BACK TO WORK';
+    title.style.cssText = `
       color: #ff5f57;
       font-size: 28px;
       margin: 0 0 20px 0;
@@ -63,9 +63,9 @@
       letter-spacing: 1px;
     `;
 
-        const message = document.createElement('p');
-        message.textContent = roast;
-        message.style.cssText = `
+    const message = document.createElement('p');
+    message.textContent = roast;
+    message.style.cssText = `
       color: #ececec;
       font-size: 18px;
       margin: 0 0 30px 0;
@@ -73,9 +73,9 @@
       line-height: 1.6;
     `;
 
-        const stats = document.createElement('div');
-        stats.textContent = `Replies: ${count}/${required}`;
-        stats.style.cssText = `
+    const stats = document.createElement('div');
+    stats.textContent = `Replies: ${count}/${required}`;
+    stats.style.cssText = `
       color: #8d8d8d;
       font-size: 16px;
       margin: 0 0 30px 0;
@@ -86,9 +86,9 @@
       display: inline-block;
     `;
 
-        const button = document.createElement('button');
-        button.textContent = 'Get Back to X';
-        button.style.cssText = `
+    const button = document.createElement('button');
+    button.textContent = 'Get Back to X';
+    button.style.cssText = `
       background: #ff5f57;
       color: white;
       border: none;
@@ -102,22 +102,22 @@
       box-shadow: 0 4px 12px rgba(255, 95, 87, 0.3);
     `;
 
-        button.onmouseover = () => {
-            button.style.background = '#ff7b73';
-            button.style.transform = 'scale(1.05)';
-        };
-        button.onmouseout = () => {
-            button.style.background = '#ff5f57';
-            button.style.transform = 'scale(1)';
-        };
+    button.onmouseover = () => {
+      button.style.background = '#ff7b73';
+      button.style.transform = 'scale(1.05)';
+    };
+    button.onmouseout = () => {
+      button.style.background = '#ff5f57';
+      button.style.transform = 'scale(1)';
+    };
 
-        button.onclick = () => {
-            window.location.href = 'https://x.com';
-        };
+    button.onclick = () => {
+      window.location.href = 'https://x.com';
+    };
 
-        // Add animations
-        const style = document.createElement('style');
-        style.textContent = `
+    // Add animations
+    const style = document.createElement('style');
+    style.textContent = `
       @keyframes fadeIn {
         from { opacity: 0; }
         to { opacity: 1; }
@@ -133,22 +133,22 @@
         }
       }
     `;
-        document.head.appendChild(style);
+    document.head.appendChild(style);
 
-        // Assemble popup
-        popup.appendChild(title);
-        popup.appendChild(message);
-        popup.appendChild(stats);
-        popup.appendChild(button);
-        backdrop.appendChild(popup);
+    // Assemble popup
+    popup.appendChild(title);
+    popup.appendChild(message);
+    popup.appendChild(stats);
+    popup.appendChild(button);
+    backdrop.appendChild(popup);
 
-        // Add to page
-        document.body.appendChild(backdrop);
+    // Add to page
+    document.body.appendChild(backdrop);
 
-        // Prevent scrolling
-        document.body.style.overflow = 'hidden';
+    // Prevent scrolling
+    document.body.style.overflow = 'hidden';
 
-        // Auto-focus button
-        button.focus();
-    }
+    // Auto-focus button
+    button.focus();
+  }
 })();
