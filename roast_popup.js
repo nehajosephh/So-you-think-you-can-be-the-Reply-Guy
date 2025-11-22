@@ -1,7 +1,6 @@
 (function () {
   let popupShown = false;
 
-  // Listen for messages from service worker
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.type === 'SHOW_ROAST_POPUP') {
       if (!popupShown) {
