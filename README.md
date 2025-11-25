@@ -2,7 +2,7 @@
 ### *A Chrome extension that makes sure you never leave X before fulfilling your sacred duty: replying to strangers.*
 
 
-## 👀 What is this?
+## What is this?
 
 **So You Think You Can Be the Reply Guy** is a chaotic productivity tool disguised as a Chrome extension.
 
@@ -18,7 +18,7 @@ If you’ve ever wanted a browser extension to:
 Then congratulations. You’ve found your calling.
 
 
-## ✨ Features
+## Features
 
 - ✔️ **Counts your actual replies** (by detecting the “Replying to” interface on X)  
 - ✔️ **Custom daily reply quota**  
