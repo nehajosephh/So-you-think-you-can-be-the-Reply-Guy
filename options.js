@@ -15,7 +15,7 @@ function showMsg(text) {
 function updateUI(count, required) {
   currentCountEl.innerText = count;
   requiredEl.value = required;
-  
+
   if (count >= required) {
     badgeEl.innerText = "Quota Met";
     badgeEl.style.color = "#9ece6a";
@@ -36,11 +36,11 @@ saveBtn.addEventListener('click', async () => {
   let val = parseInt(requiredEl.value, 10);
   if (!val || val < 1) val = 1;
   await chrome.storage.sync.set({ requiredReplies: val });
-  
+
   // Refresh UI to update badge calculation
   const data = await chrome.storage.sync.get(['count']);
   updateUI(data.count || 0, val);
-  
+
   showMsg('Settings Saved');
   chrome.runtime.sendMessage({ type: 'UPDATE_BADGE' });
 });
@@ -50,12 +50,16 @@ resetBtn.addEventListener('click', async () => {
   const date = new Date();
   const offset = date.getTimezoneOffset() * 60000;
   const today = (new Date(date - offset)).toISOString().slice(0, 10);
-  
-  await chrome.storage.sync.set({ count: 0, lastResetDate: today });
-  
+
+  await chrome.storage.sync.set({
+    count: 0,
+    lastResetDate: today,
+    lastCelebratedMilestone: 0 // Reset milestone tracking
+  });
+
   const data = await chrome.storage.sync.get(['requiredReplies']);
   updateUI(0, data.requiredReplies || 3);
-  
+
   showMsg('Count Reset');
   chrome.runtime.sendMessage({ type: 'UPDATE_BADGE' });
 });

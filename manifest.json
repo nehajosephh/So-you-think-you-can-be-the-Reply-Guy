@@ -47,7 +47,8 @@
         "*://*/*"
       ],
       "js": [
-        "roast_popup.js"
+        "roast_popup.js",
+        "celebration_popup.js"
       ],
       "run_at": "document_idle"
     }

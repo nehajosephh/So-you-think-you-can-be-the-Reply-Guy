@@ -1,5 +1,8 @@
 const DEFAULT_REQUIRED = 3;
 
+// Milestones for celebrations
+const MILESTONES = [10, 50, 100, 200, 500, 1000];
+
 // --- 1. FUNCTIONS (DEFINED FIRST TO PREVENT CRASHES) ---
 
 function isoDateToday() {
@@ -26,6 +29,42 @@ async function updateBadge() {
   }
 }
 
+async function checkMilestone(count) {
+  try {
+    const data = await chrome.storage.sync.get(["lastCelebratedMilestone"]);
+    const lastCelebrated = data.lastCelebratedMilestone || 0;
+
+    // Find the highest milestone we just reached
+    for (const milestone of MILESTONES) {
+      if (count >= milestone && lastCelebrated < milestone) {
+        console.log(`Milestone reached: ${milestone}`);
+
+        // Update last celebrated milestone
+        await chrome.storage.sync.set({ lastCelebratedMilestone: milestone });
+
+        // Notify all tabs to show celebration
+        const tabs = await chrome.tabs.query({});
+        for (const tab of tabs) {
+          try {
+            await chrome.tabs.sendMessage(tab.id, {
+              type: 'SHOW_CELEBRATION',
+              milestone: milestone,
+              totalCount: count
+            });
+          } catch (e) {
+            // Tab might not have content script, ignore
+          }
+        }
+
+        // Only celebrate the first milestone reached
+        break;
+      }
+    }
+  } catch (e) {
+    console.error("Milestone check error:", e);
+  }
+}
+
 async function checkDailyReset() {
   try {
     const data = await chrome.storage.sync.get(["lastResetDate"]);
@@ -33,7 +72,11 @@ async function checkDailyReset() {
 
     if (!data.lastResetDate || data.lastResetDate !== today) {
       console.log("New day. Resetting count.");
-      await chrome.storage.sync.set({ count: 0, lastResetDate: today });
+      await chrome.storage.sync.set({
+        count: 0,
+        lastResetDate: today,
+        lastCelebratedMilestone: 0 // Reset milestone tracking for new day
+      });
       updateBadge();
     }
   } catch (e) {
@@ -77,36 +120,16 @@ async function bullyUser() {
   if (count < required) {
     const roast = ROASTS[Math.floor(Math.random() * ROASTS.length)];
 
-    // Send message to active tab to show popup
     try {
-      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tabs[0]) {
-        // Don't show popup if user is on X/Twitter
-        const url = tabs[0].url || '';
-        if (!url.includes('x.com') && !url.includes('twitter.com')) {
-          chrome.tabs.sendMessage(tabs[0].id, {
-            type: 'SHOW_ROAST_POPUP',
-            roast: roast,
-            count: count,
-            required: required
-          });
-        }
-      }
-    } catch (e) {
-      console.log("Failed to send popup message:", e);
-
-      // Fallback to notification
-      try {
-        chrome.notifications.create({
-          type: 'basic',
-          iconUrl: 'icon.png',
-          title: 'Get Back To Work',
-          message: `${roast} (${count}/${required})`,
-          priority: 2
-        });
-      } catch (notifError) {
-        console.log("Notification also failed:", notifError);
-      }
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: 'icon.png',
+        title: 'Get Back To Work',
+        message: `${roast} (${count}/${required})`,
+        priority: 2
+      });
+    } catch (notifError) {
+      console.log("Notification also failed:", notifError);
     }
   }
 }
@@ -135,6 +158,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       const newCount = ((data && data.count) ? data.count : 0) + 1;
       await chrome.storage.sync.set({ count: newCount });
       updateBadge();
+
+      // Check if this count hits a milestone
+      await checkMilestone(newCount);
+
       sendResponse({ success: true, newCount });
     })();
     return true; // Keep channel open
