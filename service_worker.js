@@ -49,7 +49,8 @@ async function checkMilestone(count) {
             await chrome.tabs.sendMessage(tab.id, {
               type: 'SHOW_CELEBRATION',
               milestone: milestone,
-              totalCount: count
+              totalCount: count,
+              isQuota: false
             });
           } catch (e) {
             // Tab might not have content script, ignore
@@ -75,7 +76,8 @@ async function checkDailyReset() {
       await chrome.storage.sync.set({
         count: 0,
         lastResetDate: today,
-        lastCelebratedMilestone: 0 // Reset milestone tracking for new day
+        lastCelebratedMilestone: 0, // Reset milestone tracking for new day
+        quotaCelebrated: false // Reset quota celebration for new day
       });
       updateBadge();
     }
@@ -154,10 +156,34 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'increment') {
     (async () => {
       await checkDailyReset();
-      const data = await chrome.storage.sync.get(["count"]);
+      const data = await chrome.storage.sync.get(["count", "requiredReplies", "quotaCelebrated"]);
       const newCount = ((data && data.count) ? data.count : 0) + 1;
+      const required = (data && data.requiredReplies) ? data.requiredReplies : DEFAULT_REQUIRED;
+      const quotaCelebrated = data.quotaCelebrated || false;
+
       await chrome.storage.sync.set({ count: newCount });
       updateBadge();
+
+      // Check if quota is met for the first time today
+      if (newCount >= required && !quotaCelebrated) {
+        console.log(`Daily quota met: ${newCount}/${required}`);
+        await chrome.storage.sync.set({ quotaCelebrated: true });
+
+        // Show quota celebration
+        const tabs = await chrome.tabs.query({});
+        for (const tab of tabs) {
+          try {
+            await chrome.tabs.sendMessage(tab.id, {
+              type: 'SHOW_CELEBRATION',
+              milestone: required,
+              totalCount: newCount,
+              isQuota: true
+            });
+          } catch (e) {
+            // Tab might not have content script
+          }
+        }
+      }
 
       // Check if this count hits a milestone
       await checkMilestone(newCount);

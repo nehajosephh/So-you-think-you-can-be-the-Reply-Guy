@@ -5,7 +5,7 @@
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.type === 'SHOW_CELEBRATION') {
       if (!celebrationShown) {
-        showCelebration(msg.milestone, msg.totalCount);
+        showCelebration(msg.milestone, msg.totalCount, msg.isQuota);
         celebrationShown = true;
         // Reset after 10 seconds to allow showing again if needed
         setTimeout(() => { celebrationShown = false; }, 10000);
@@ -13,7 +13,7 @@
     }
   });
 
-  function showCelebration(milestone, totalCount) {
+  function showCelebration(milestone, totalCount, isQuota = false) {
     // Don't show on X/Twitter pages
     if (window.location.hostname.includes('x.com') || window.location.hostname.includes('twitter.com')) {
       return;
@@ -135,7 +135,7 @@
     `;
 
     const title = document.createElement('h1');
-    title.textContent = 'MILESTONE ACHIEVED!';
+    title.textContent = isQuota ? 'QUOTA ACHIEVED!' : 'MILESTONE ACHIEVED!';
     title.style.cssText = `
       color: #9ece6a;
       font-size: 32px;
@@ -150,7 +150,11 @@
     `;
 
     const milestone_text = document.createElement('p');
-    milestone_text.innerHTML = `You've completed <span style="color: #2eaadc; font-weight: 700; font-size: 48px;">${milestone}</span> replies!`;
+    if (isQuota) {
+      milestone_text.innerHTML = `You've completed your <span style="color: #2eaadc; font-weight: 700; font-size: 48px;">${milestone}</span> daily replies!`;
+    } else {
+      milestone_text.innerHTML = `You've completed <span style="color: #2eaadc; font-weight: 700; font-size: 48px;">${milestone}</span> replies!`;
+    }
     milestone_text.style.cssText = `
       color: #ececec;
       font-size: 24px;
@@ -170,7 +174,12 @@
       500: "FIVE HUNDRED?! You're not human anymore!",
       1000: "ONE THOUSAND! You've transcended reality!"
     };
-    message.textContent = messages[milestone] || "Incredible achievement! Keep crushing it!";
+
+    if (isQuota) {
+      message.textContent = "Great job! You've hit your daily quota. Keep the momentum going! 🎯";
+    } else {
+      message.textContent = messages[milestone] || "Incredible achievement! Keep crushing it!";
+    }
     message.style.cssText = `
       color: #a9b1d6;
       font-size: 16px;
